@@ -38,10 +38,19 @@ class Line:
     cost_usd: Decimal = Decimal(0)
     latency_ms: float = 0.0
     max_latency_ms: float = 0.0
+    tool_rounds: int = 0            # calls that asked for tools to be run
+    structured_calls: int = 0
+    fallback_calls: int = 0         # free-text calls retrying a failed structured call
+    fallback_cost_usd: Decimal = Decimal(0)
     models: set[str] = field(default_factory=set)
 
-    def add(self, r: LLMCallRecord) -> None:
+    def add(self, r: LLMCallRecord, fallback: bool = False) -> None:
         self.calls += 1
+        self.tool_rounds += r.tool_calls > 0
+        self.structured_calls += r.structured_method is not None
+        if fallback:
+            self.fallback_calls += 1
+            self.fallback_cost_usd += r.estimated_cost_usd or Decimal(0)
         self.failures += not r.success
         self.models.add(f"{r.provider}/{r.model}")
         self.latency_ms += r.latency_ms
@@ -58,6 +67,25 @@ class Line:
             self.cost_usd += r.estimated_cost_usd
 
 
+def fallback_call_ids(records: list[LLMCallRecord]) -> set[str]:
+    """Calls that retried a failed structured call as plain text.
+
+    Within a run, a call by an agent that already made a structured call, which
+    is itself neither structured nor tool-using, is the free-text retry. Upstream
+    agents that use structured output make exactly one structured call each, so
+    any such follow-up is a fallback (one per failed structured call).
+    """
+    seen_structured: set[tuple[str, str]] = set()
+    fallbacks = set()
+    for r in sorted(records, key=lambda r: r.started_at):
+        key = (r.run_id, r.agent)
+        if r.structured_method is not None:
+            seen_structured.add(key)
+        elif key in seen_structured and r.tools_offered == 0:
+            fallbacks.add(r.call_id)
+    return fallbacks
+
+
 @dataclass
 class UsageSummary:
     records: list[LLMCallRecord]
@@ -65,6 +93,7 @@ class UsageSummary:
     by_stage: dict[str, Line]
     by_model: dict[str, Line]
     total: Line
+    fallback_ids: set[str] = field(default_factory=set)
 
     @property
     def complete(self) -> bool:
@@ -77,12 +106,14 @@ def summarize(records: list[LLMCallRecord]) -> UsageSummary:
     by_stage: dict[str, Line] = defaultdict(Line)
     by_model: dict[str, Line] = defaultdict(Line)
     total = Line()
+    fallbacks = fallback_call_ids(records)
     for r in records:
-        by_agent[r.agent].add(r)
-        by_stage[stage_of(r.agent)].add(r)
-        by_model[f"{r.provider}/{r.model}"].add(r)
-        total.add(r)
-    return UsageSummary(records, dict(by_agent), dict(by_stage), dict(by_model), total)
+        fallback = r.call_id in fallbacks
+        by_agent[r.agent].add(r, fallback)
+        by_stage[stage_of(r.agent)].add(r, fallback)
+        by_model[f"{r.provider}/{r.model}"].add(r, fallback)
+        total.add(r, fallback)
+    return UsageSummary(records, dict(by_agent), dict(by_stage), dict(by_model), total, fallbacks)
 
 
 def _usd(value: Decimal) -> str:
@@ -91,17 +122,21 @@ def _usd(value: Decimal) -> str:
 
 def render_markdown(summary: UsageSummary, top: int = 5) -> str:
     t = summary.total
-    lines = ["| Agent | Stage | Calls | Input tok | Output tok | Cost | Total latency | Slowest call |",
-             "|---|---|---:|---:|---:|---:|---:|---:|"]
+    lines = ["| Agent | Stage | Calls | Tool rounds | Structured | Fallbacks | Input tok | Output tok | "
+             "Total tok | Cost | Total latency | Slowest call |",
+             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     order = sorted(summary.by_agent.items(), key=lambda kv: (list(STAGES).index(stage_of(kv[0]))
                                                             if stage_of(kv[0]) in STAGES else 99,
                                                             -kv[1].cost_usd))
     for agent, line in order:
-        lines.append(f"| {display_name(agent)} | {stage_of(agent)} | {line.calls} | "
-                     f"{line.input_tokens:,} | {line.output_tokens:,} | {_usd(line.cost_usd)} | "
-                     f"{line.latency_ms / 1000:.1f}s | {line.max_latency_ms / 1000:.1f}s |")
-    lines.append(f"| **Total run** | | **{t.calls}** | **{t.input_tokens:,}** | **{t.output_tokens:,}** | "
-                 f"**{_usd(t.cost_usd)}** | {t.latency_ms / 1000:.1f}s | {t.max_latency_ms / 1000:.1f}s |")
+        lines.append(f"| {display_name(agent)} | {stage_of(agent)} | {line.calls} | {line.tool_rounds} | "
+                     f"{line.structured_calls} | {line.fallback_calls} | {line.input_tokens:,} | "
+                     f"{line.output_tokens:,} | {line.input_tokens + line.output_tokens:,} | "
+                     f"{_usd(line.cost_usd)} | {line.latency_ms / 1000:.1f}s | {line.max_latency_ms / 1000:.1f}s |")
+    lines.append(f"| **Total run** | | **{t.calls}** | {t.tool_rounds} | {t.structured_calls} | "
+                 f"**{t.fallback_calls}** | **{t.input_tokens:,}** | **{t.output_tokens:,}** | "
+                 f"**{t.input_tokens + t.output_tokens:,}** | **{_usd(t.cost_usd)}** | "
+                 f"{t.latency_ms / 1000:.1f}s | {t.max_latency_ms / 1000:.1f}s |")
 
     out = ["## Cost by agent", "", *lines, "", "## Cost by stage", "",
            "| Stage | Calls | Cost | Share |", "|---|---:|---:|---:|"]
@@ -127,6 +162,18 @@ def render_markdown(summary: UsageSummary, top: int = 5) -> str:
     out += [f"| {display_name(r.agent)} | {r.input_tokens if r.input_tokens is not None else 'n/a'} | "
             f"{r.prompt_chars:,} | {_usd(r.estimated_cost_usd) if r.estimated_cost_usd is not None else 'n/a'} |"
             for r in largest]
+
+    out += ["", "## Every call", "", "| # | Agent | Provider / model | Kind | Tools offered | Tool calls | "
+            "Input tok | Output tok | Cost | Latency | OK |", "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|"]
+    for i, r in enumerate(sorted(summary.records, key=lambda r: r.started_at), 1):
+        kind = ("fallback (free text)" if r.call_id in summary.fallback_ids
+                else f"structured ({r.structured_method})" if r.structured_method
+                else "tool round" if r.tool_calls else "text")
+        out.append(f"| {i} | {display_name(r.agent)} | {r.provider}/{r.model} | {kind} | {r.tools_offered} | "
+                   f"{r.tool_calls} | {r.input_tokens if r.input_tokens is not None else 'n/a'} | "
+                   f"{r.output_tokens if r.output_tokens is not None else 'n/a'} | "
+                   f"{_usd(r.estimated_cost_usd) if r.estimated_cost_usd is not None else 'n/a'} | "
+                   f"{r.latency_ms / 1000:.1f}s | {'yes' if r.success else 'FAILED'} |")
 
     notes = []
     if t.failures:

@@ -49,6 +49,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_OUT = Path("docs/sid_trading_firm/baselines")
 DEFAULT_LEDGER = Path.home() / ".sid_trading_firm" / "llm_usage.jsonl"
 ALL_ANALYSTS = ("market", "social", "news", "fundamentals")
+DEFAULT_LABEL = "UPSTREAM ALL-SONNET BASELINE"
+LABEL_NOTE = (
+    "Inherited upstream behaviour: upstream's graph has two model tiers, so every agent here "
+    "runs on the same model. This is NOT the planned FAST/STANDARD/DEEP mixed-model design, "
+    "and one run is one sample: do not derive production budgets from it."
+)
 
 # US-listed common stock symbols in Yahoo's convention, which upstream's data layer
 # uses: 1-5 letters, optionally a share class after a hyphen (BRK-B). A dot marks
@@ -121,6 +127,9 @@ class BaselineResult:
     wall_seconds: float = 0.0
     stops: list[BudgetStopEvent] = field(default_factory=list)
     fallbacks: dict[str, int] = field(default_factory=dict)
+    authorized_calls: int = 0
+    run_spend: Decimal = Decimal(0)
+    label: str = DEFAULT_LABEL
 
 
 def run_baseline(
@@ -131,6 +140,7 @@ def run_baseline(
     out_root: Path = DEFAULT_OUT,
     ledger_path: Path = DEFAULT_LEDGER,
     analysts: tuple[str, ...] = ALL_ANALYSTS,
+    label: str = DEFAULT_LABEL,
 ) -> BaselineResult:
     """Run one metered upstream analysis and write its report. Never raises for a stopped run."""
     from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -150,7 +160,7 @@ def run_baseline(
     with run_context(instrument=ticker, strategy="upstream_baseline",
                      environment=settings.app.environment.value) as run:
         out_dir = Path(out_root) / f"{trade_date}_{ticker}_{run.run_id[:8]}"
-        result = BaselineResult(run.run_id, "failed", ticker, trade_date, out_dir)
+        result = BaselineResult(run.run_id, "failed", ticker, trade_date, out_dir, label=label)
         started = time.perf_counter()
         logger.info("baseline run starting", extra={"trade_date": trade_date, "analysts": list(analysts)})
         try:
@@ -167,6 +177,8 @@ def run_baseline(
             logging.getLogger("tradingagents.agents.structured").removeHandler(fallbacks)
         result.stops = list(guard.stops)
         result.fallbacks = dict(fallbacks.counts)
+        result.authorized_calls = guard.authorized_calls
+        result.run_spend = guard.run_spend(run.run_id)
     write_report(result, store.records(result.run_id), settings, analysts)
     return result
 
@@ -188,9 +200,17 @@ def write_report(result: BaselineResult, records, settings: Settings, analysts) 
         "input_tokens": t.input_tokens, "output_tokens": t.output_tokens,
         "cache_read_tokens": t.cache_read_tokens, "cost_usd": str(t.cost_usd),
         "calls_without_usage": t.no_usage, "calls_unpriced": t.unpriced,
+        "label": result.label,
+        "tool_rounds": t.tool_rounds, "structured_calls": t.structured_calls,
+        "fallback_calls": t.fallback_calls, "fallback_cost_usd": str(t.fallback_cost_usd),
+        "budget_guard": {"authorized_calls": result.authorized_calls, "stops": len(result.stops),
+                         "run_spend_usd": str(result.run_spend),
+                         "run_cap_usd": str(settings.budgets.max_ai_cost_per_run_usd)},
         "by_agent": {a: {"calls": line.calls, "input_tokens": line.input_tokens,
                          "output_tokens": line.output_tokens, "cost_usd": str(line.cost_usd),
-                         "latency_s": round(line.latency_ms / 1000, 1)}
+                         "latency_s": round(line.latency_ms / 1000, 1), "tool_rounds": line.tool_rounds,
+                         "structured_calls": line.structured_calls, "fallback_calls": line.fallback_calls,
+                         "fallback_cost_usd": str(line.fallback_cost_usd), "models": sorted(line.models)}
                      for a, line in summary.by_agent.items()},
         "structured_output_fallbacks": result.fallbacks,
         "budget_stops": [s.to_dict() for s in result.stops],
@@ -205,10 +225,12 @@ def write_report(result: BaselineResult, records, settings: Settings, analysts) 
                  if result.stops else ["None."])
     b = settings.budgets
     lines = [
-        f"# Baseline LLM usage: {result.ticker} on {result.trade_date}",
+        f"# {result.label}: {result.ticker} on {result.trade_date}",
         "",
         "Measures what one normal upstream TradingAgents analysis costs. It does not evaluate "
         "the investment decision.",
+        "",
+        f"> {LABEL_NOTE}",
         "",
         "| | |", "|---|---|",
         f"| Run id | `{result.run_id}` |",
@@ -224,12 +246,19 @@ def write_report(result: BaselineResult, records, settings: Settings, analysts) 
         f"| Wall time | {result.wall_seconds:.0f}s |",
         f"| Total | **{t.calls} calls, {t.input_tokens:,} input + {t.output_tokens:,} output tokens, "
         f"${t.cost_usd:.4f}** |",
+        f"| Tool rounds | {t.tool_rounds} |",
+        f"| Structured calls | {t.structured_calls}, of which failed and retried as free text: "
+        f"**{t.fallback_calls}** (fallback cost ${t.fallback_cost_usd:.4f}) |",
+        f"| Budget guard | consulted for {result.authorized_calls} calls; stops: {len(result.stops)}; "
+        f"run spend ${result.run_spend:.4f} of ${b.max_ai_cost_per_run_usd} cap |",
         "",
         render_markdown(summary),
         "",
         "## Structured-output fallbacks",
         "",
-        "Each fallback is a structured call that did not parse, retried by upstream as a second, free-text call.",
+        "Each fallback is a structured call that did not parse, retried by upstream as a second, free-text "
+        "call. Counted two independent ways: from upstream's own warnings (below) and from the call "
+        f"records (the Fallbacks column above: {t.fallback_calls}).",
         "",
         *fallback_rows,
         "",
@@ -255,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--budget-usd", type=Decimal, default=None,
                         help="hard cap for this run in USD (default: budgets.max_ai_cost_per_run_usd)")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--label", default=DEFAULT_LABEL, help="report heading")
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER,
                         help="shared usage ledger (JSON lines) that the daily budget is counted from")
     args = parser.parse_args(argv)
@@ -270,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     logger.info("API keys present for: %s", ", ".join(keys))
     result = run_baseline(ticker, args.date or previous_weekday(), settings=settings,
-                          out_root=args.out, ledger_path=args.ledger)
+                          out_root=args.out, ledger_path=args.ledger, label=args.label)
     print(f"{result.status}: report at {result.out_dir / 'report.md'}")
     return 0 if result.status == "completed" else 1
 

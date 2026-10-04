@@ -90,6 +90,17 @@ def check_usage_needs_its_run(db):
         SqlUsageStore(db).add(record(new_run_id()))
 
 
+def check_call_details_round_trip(db):
+    from dataclasses import replace
+
+    runs, store = RunRepository(db), SqlUsageStore(db)
+    with run_context() as run:
+        runs.start(run, kind="analysis", settings=settings())
+    store.add(replace(record(run.run_id), structured_method="json_schema", tools_offered=3, tool_calls=2))
+    (back,) = store.records(run.run_id)
+    assert (back.structured_method, back.tools_offered, back.tool_calls) == ("json_schema", 3, 2)
+
+
 def check_metered_calls_land_in_the_database(db):
     runs, store, audit = RunRepository(db), SqlUsageStore(db), AuditLog(db)
     s = settings(max_agent_iterations=1)

@@ -121,6 +121,7 @@ class BudgetGuard:
         self._runs: dict[str, _RunState] = {}
         self._assumed_by_day: Counter = Counter()
         self.stops: list[BudgetStopEvent] = []
+        self.authorized_calls = 0          # calls the guard allowed, across runs
         self._listeners: list[Callable[[BudgetStopEvent], None]] = []
 
     # ------------------------------------------------------------------ public
@@ -213,6 +214,7 @@ class BudgetGuard:
                     detail=f"next {agent} call could bring today's spend to ${day_projected:.4f}"))
 
             call_id = str(uuid.uuid4())
+            self.authorized_calls += 1
             state.reserved[call_id] = reserve
             state.agent_calls[agent] = calls
             return Authorization(call_id, run_id, agent, est_in, est_out, reserve)
