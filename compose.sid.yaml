@@ -1,0 +1,27 @@
+# Local PostgreSQL for SID Trading Firm development.
+#   docker compose -f compose.sid.yaml up -d
+#   python -m sid_trading_firm.persistence.migrate upgrade
+# Needs SID_POSTGRES_PASSWORD in .env (Compose reads .env from this folder).
+# Bound to localhost only; never expose this port publicly.
+name: sid-trading-firm
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sid_trading_firm
+      POSTGRES_USER: sid
+      POSTGRES_PASSWORD: ${SID_POSTGRES_PASSWORD:?set SID_POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - sid_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sid -d sid_trading_firm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sid_pgdata:

@@ -45,6 +45,9 @@ sid = [
     "pydantic>=2.7",
     "pydantic-settings>=2.6",
     "pyyaml>=6.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
 ]
 
 [project.scripts]
@@ -59,7 +62,12 @@ include = ["tradingagents*", "cli*", "sid_trading_firm*"]
 [tool.setuptools.package-data]
 cli = ["static/*"]
 tradingagents = ["assets/*.svg"]
-sid_trading_firm = ["config/*.yaml"]
+sid_trading_firm = [
+    "config/*.yaml",
+    "persistence/migrations/*.py",
+    "persistence/migrations/*.mako",
+    "persistence/migrations/versions/*.py",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
