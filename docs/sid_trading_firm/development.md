@@ -5,8 +5,12 @@
 - `main` is protected by convention: nothing is pushed to it directly.
 - Branch per logical change: `sid/<short-topic>` (for example `sid/p1-03-usage-ledger`).
   A change that builds on an unmerged one branches from it and its PR targets that
-  branch; GitHub retargets it to `main` when the parent merges.
-- PRs follow `.github/pull_request_template.md`. The owner reviews and merges.
+  branch. After the parent merges, retarget the dependent PR to `main` explicitly and only
+  then delete the parent branch: deleting a base branch through the CLI or API closed the
+  dependent PR instead of retargeting it (Phase 1A merge, 2026-10-04).
+- PRs follow `.github/pull_request_template.md`. The owner reviews and merges, except under
+  delegated merge authority (`docs/GOVERNANCE.md` section 26), where Claude Code merges after
+  the checks listed there and Codex reviews a consolidated package afterwards.
 - Before opening a PR:
 
 ```bash
