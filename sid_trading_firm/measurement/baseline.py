@@ -40,7 +40,7 @@ from sid_trading_firm.llm import (
     UsageLedger,
 )
 from sid_trading_firm.llm.models import upstream_config
-from sid_trading_firm.llm.report import render_markdown, summarize
+from sid_trading_firm.llm.report import capped_calls, render_markdown, summarize
 from sid_trading_firm.observability.logging import configure_logging
 from sid_trading_firm.runtime import run_context
 
@@ -192,6 +192,8 @@ def write_report(result: BaselineResult, records, settings: Settings, analysts) 
     summary = summarize(records)
     t = summary.total
     std, deep = settings.models.tiers[Tier.STANDARD], settings.models.tiers[Tier.DEEP]
+    cap = std.max_output_tokens
+    capped = capped_calls(summary, cap)
 
     (out / "summary.json").write_text(json.dumps({
         "run_id": result.run_id, "status": result.status, "ticker": result.ticker,
@@ -200,9 +202,10 @@ def write_report(result: BaselineResult, records, settings: Settings, analysts) 
         "input_tokens": t.input_tokens, "output_tokens": t.output_tokens,
         "cache_read_tokens": t.cache_read_tokens, "cost_usd": str(t.cost_usd),
         "calls_without_usage": t.no_usage, "calls_unpriced": t.unpriced,
-        "label": result.label,
+        "label": result.label, "analysts": list(analysts),
         "tool_rounds": t.tool_rounds, "structured_calls": t.structured_calls,
         "fallback_calls": t.fallback_calls, "fallback_cost_usd": str(t.fallback_cost_usd),
+        "calls_at_output_cap": [{"agent": r.agent, "output_tokens": r.output_tokens} for r in capped],
         "budget_guard": {"authorized_calls": result.authorized_calls, "stops": len(result.stops),
                          "run_spend_usd": str(result.run_spend),
                          "run_cap_usd": str(settings.budgets.max_ai_cost_per_run_usd)},
@@ -249,10 +252,12 @@ def write_report(result: BaselineResult, records, settings: Settings, analysts) 
         f"| Tool rounds | {t.tool_rounds} |",
         f"| Structured calls | {t.structured_calls}, of which failed and retried as free text: "
         f"**{t.fallback_calls}** (fallback cost ${t.fallback_cost_usd:.4f}) |",
+        f"| Output cap reached | {len(capped)} call(s)"
+        f"{' (' + ', '.join(display_name(r.agent) for r in capped) + ')' if capped else ''} |",
         f"| Budget guard | consulted for {result.authorized_calls} calls; stops: {len(result.stops)}; "
         f"run spend ${result.run_spend:.4f} of ${b.max_ai_cost_per_run_usd} cap |",
         "",
-        render_markdown(summary),
+        render_markdown(summary, output_cap=cap),
         "",
         "## Structured-output fallbacks",
         "",
@@ -275,6 +280,33 @@ def write_report(result: BaselineResult, records, settings: Settings, analysts) 
     ]
     (out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out / "report.md"
+
+
+def rerender_report(out_dir: Path, settings: Settings) -> Path:
+    """Rebuild a run's report from its saved call records, without calling any model.
+
+    For when report formatting or derived figures change: the records and the
+    run facts kept in summary.json are the evidence, the report is derived.
+    """
+    from sid_trading_firm.llm.usage import LLMCallRecord
+
+    out_dir = Path(out_dir)
+    saved = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    with (out_dir / "llm_calls.jsonl").open(encoding="utf-8") as f:
+        records = [LLMCallRecord.from_json(line) for line in f if line.strip()]
+    stops = [BudgetStopEvent(**{**stop, "at": datetime.fromisoformat(stop["at"])})
+             for stop in saved.get("budget_stops", [])]
+    guard = saved.get("budget_guard", {})
+    result = BaselineResult(
+        run_id=saved["run_id"], status=saved["status"], ticker=saved["ticker"],
+        trade_date=saved["trade_date"], out_dir=out_dir, signal=saved.get("signal"),
+        error=saved.get("error"), wall_seconds=saved.get("wall_seconds", 0.0), stops=stops,
+        fallbacks=saved.get("structured_output_fallbacks", {}),
+        authorized_calls=guard.get("authorized_calls", len(records)),
+        run_spend=Decimal(guard.get("run_spend_usd", "0")),
+        label=saved.get("label", DEFAULT_LABEL),
+    )
+    return write_report(result, records, settings, tuple(saved.get("analysts", ALL_ANALYSTS)))
 
 
 def main(argv: list[str] | None = None) -> int:

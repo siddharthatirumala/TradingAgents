@@ -46,7 +46,8 @@ class Line:
 
     def add(self, r: LLMCallRecord, fallback: bool = False) -> None:
         self.calls += 1
-        self.tool_rounds += r.tool_calls > 0
+        # A structured call answers by "calling" its schema tool; that is not a tool round.
+        self.tool_rounds += r.tool_calls > 0 and r.structured_method is None
         self.structured_calls += r.structured_method is not None
         if fallback:
             self.fallback_calls += 1
@@ -120,7 +121,14 @@ def _usd(value: Decimal) -> str:
     return f"${value:.4f}"
 
 
-def render_markdown(summary: UsageSummary, top: int = 5) -> str:
+def capped_calls(summary: UsageSummary, output_cap: int | None) -> list[LLMCallRecord]:
+    """Calls whose output reached the configured cap: their text was probably cut off."""
+    if not output_cap:
+        return []
+    return [r for r in summary.records if r.output_tokens is not None and r.output_tokens >= output_cap]
+
+
+def render_markdown(summary: UsageSummary, top: int = 5, output_cap: int | None = None) -> str:
     t = summary.total
     lines = ["| Agent | Stage | Calls | Tool rounds | Structured | Fallbacks | Input tok | Output tok | "
              "Total tok | Cost | Total latency | Slowest call |",
@@ -169,6 +177,8 @@ def render_markdown(summary: UsageSummary, top: int = 5) -> str:
         kind = ("fallback (free text)" if r.call_id in summary.fallback_ids
                 else f"structured ({r.structured_method})" if r.structured_method
                 else "tool round" if r.tool_calls else "text")
+        if output_cap and r.output_tokens is not None and r.output_tokens >= output_cap:
+            kind += " **hit output cap**"
         out.append(f"| {i} | {display_name(r.agent)} | {r.provider}/{r.model} | {kind} | {r.tools_offered} | "
                    f"{r.tool_calls} | {r.input_tokens if r.input_tokens is not None else 'n/a'} | "
                    f"{r.output_tokens if r.output_tokens is not None else 'n/a'} | "
@@ -183,6 +193,11 @@ def render_markdown(summary: UsageSummary, top: int = 5) -> str:
                      "and not included above.")
     if t.unpriced:
         notes.append(f"{t.unpriced} call(s) used a model with no price; their cost is not included above.")
+    capped = capped_calls(summary, output_cap)
+    if capped:
+        names = ", ".join(display_name(r.agent) for r in capped)
+        notes.append(f"{len(capped)} call(s) reached the {output_cap}-token output cap and were probably "
+                     f"truncated: {names}.")
     if notes:
         out += ["", "## Data quality", "", *[f"- {n}" for n in notes]]
     return "\n".join(out)

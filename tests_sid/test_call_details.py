@@ -115,3 +115,21 @@ def test_an_upstream_run_reports_its_tool_rounds(tmp_path, monkeypatch):
     assert {a: line.tool_rounds for a, line in summary.by_agent.items() if line.tool_rounds} == {
         "technical_analyst": 1, "news_analyst": 1, "fundamentals_analyst": 1}
     assert summary.total.fallback_calls == 0
+
+
+def test_a_structured_call_is_not_a_tool_round_even_though_it_calls_its_schema_tool():
+    records = [_rec("trader", 1, structured="function_calling", tools=1, tool_calls=1),
+               _rec("news_analyst", 2, tools=4, tool_calls=2)]
+    summary = summarize(records)
+    assert summary.total.tool_rounds == 1
+    assert summary.by_agent["trader"].tool_rounds == 0
+
+
+def test_calls_that_reach_the_output_cap_are_flagged():
+    capped = _rec("bear_researcher", 1)
+    capped = capped.__class__(**{**capped.__dict__, "output_tokens": 8192})
+    summary = summarize([capped, _rec("bull_researcher", 2)])
+    text = render_markdown(summary, output_cap=8192)
+    assert "hit output cap" in text
+    assert "1 call(s) reached the 8192-token output cap" in text
+    assert "hit output cap" not in render_markdown(summary)          # no cap given, no flag

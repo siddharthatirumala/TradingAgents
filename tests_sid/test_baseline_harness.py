@@ -129,3 +129,21 @@ def test_main_exits_cleanly_without_keys(monkeypatch, capsys):
 def test_default_date_is_the_previous_weekday():
     assert baseline.previous_weekday(date(2026, 10, 5)) == "2026-10-02"   # Monday -> Friday
     assert baseline.previous_weekday(date(2026, 10, 7)) == "2026-10-06"
+
+
+@pytest.mark.usefixtures("offline")
+def test_a_report_can_be_rebuilt_from_saved_records_without_calling_a_model(tmp_path, scripted):
+    s = settings()
+    result = baseline.run_baseline("NVDA", TRADE_DATE, settings=s, out_root=tmp_path / "out",
+                                   ledger_path=tmp_path / "ledger.jsonl")
+    original = json.loads((result.out_dir / "summary.json").read_text())
+    (result.out_dir / "report.md").unlink()
+    calls_before = sum(len(model.calls) for _, _, model in scripted)
+
+    baseline.rerender_report(result.out_dir, s)
+
+    assert sum(len(model.calls) for _, _, model in scripted) == calls_before
+    rebuilt = json.loads((result.out_dir / "summary.json").read_text())
+    for key in ("run_id", "status", "calls", "cost_usd", "wall_seconds", "budget_guard"):
+        assert rebuilt[key] == original[key], key
+    assert "UPSTREAM ALL-SONNET BASELINE" in (result.out_dir / "report.md").read_text()
