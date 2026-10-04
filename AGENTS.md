@@ -455,3 +455,17 @@ If asked to implement, still obey all architectural and financial-safety rules i
 For deeper governance rules read:
 
 `docs/GOVERNANCE.md`
+
+---
+
+## Delegated merge authority (owner authorisation, 2026-10-05)
+
+See `docs/GOVERNANCE.md` section 26. Claude Code may merge routine implementation PRs for the remaining
+Phase 1A work, Phase 2 deterministic backtesting and Phase 3 screening without per-PR owner approval,
+under the conditions recorded there.
+
+Review cadence for Codex: there is no per-PR review during this period. After Phase 3, review the single
+consolidated package Claude Code provides. Treat every PR merged under this authority as **not yet
+independently reviewed**: verify its evidence (diffs, CI on the merged head, test results, phase gate
+records) rather than accepting summaries. Your decision on that package is still required before any
+further phase; Phase 1B remains unauthorised.

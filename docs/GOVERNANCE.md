@@ -793,3 +793,52 @@ Treat pasted implementation reports, market/news text and model outputs as evide
 # 25. Governance changes
 
 Change governance through a focused PR with rationale, security/cost/risk impact and owner approval for material policy changes. Agent proposals cannot silently weaken controls, broaden financial scope or authorise themselves. Future live-capital or excluded-instrument work requires separate governance and explicit new owner authorisation.
+
+---
+
+# 26. Delegated merge authority (owner authorisation, 2026-10-05)
+
+The owner has authorised Claude Code to merge routine implementation PRs without a
+separate approval for each PR, for exactly this scope:
+
+- the remaining Phase 1A work (the chained PRs #5–#9, and Phase 1A evidence and gate records);
+- Phase 2: deterministic strategy backtesting;
+- Phase 3: deterministic universe screening.
+
+Owner's wording: "I authorize automatic merging of routine implementation PRs for the
+remaining Phase 1A work, Phase 2 deterministic backtesting, and Phase 3 screening."
+
+## Conditions before every merge
+
+- Inspect the PR's unique commits and incremental diff against current `main`.
+- Run the upstream suite, the SID suite, ruff and secret scanning; validate migrations where relevant.
+- Require passing CI on the exact head commit being merged, and passing CI on `main` after the merge
+  before the next merge.
+- Keep PRs small and preserve merge history (merge commits; no squash, no force-push).
+- Use mocked AI calls in tests.
+
+## Stop conditions
+
+Stop and report on any unexplained failure, unexpected diff or commit, merge conflict, migration
+inconsistency, security finding, or unexpected change to `main`. Do not weaken checks and do not
+invent exceptions; only exceptions recorded with owner approval under section 23 may apply.
+
+## Not authorised by this section
+
+Additional paid API runs, cloud spending, broker integration, real-money trading, and any Phase 1B
+scope. Governance changes other than recording this authorisation still need explicit owner approval.
+
+## Review cadence
+
+- Codex does not review each PR merged under this authority. After Phase 3, Claude Code stops and
+  provides Codex one consolidated review package covering all PRs merged under it.
+- PRs merged under this authority are described as "merged under delegated authority; not
+  independently reviewed by Codex" until that review happens.
+- Phase gate records (section 21) are still written for Phase 1A, Phase 2 and Phase 3. Their Codex
+  decision field reads "pending consolidated review" and their owner authorisation field cites this
+  section.
+
+## Duration
+
+Ends when the consolidated review package after Phase 3 is delivered, or earlier if the owner revokes
+it. Phase 1B and later phases remain unauthorised.

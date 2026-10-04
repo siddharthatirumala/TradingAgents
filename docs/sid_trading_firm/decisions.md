@@ -57,3 +57,11 @@ and the reason; change one only with a new entry that says why.
 - No direct pushes to `main`. One branch and one small PR per logical change,
   each described with: purpose, changes, architecture, files, testing, security,
   cost, technical debt and next step. PRs are merged by the owner, never silently.
+
+## D9. Delegated merge authority (2026-10-05)
+- The owner authorised Claude Code to merge routine implementation PRs for the remaining Phase 1A
+  work, Phase 2 (deterministic backtesting) and Phase 3 (screening) without per-PR approval.
+  Recorded in `docs/GOVERNANCE.md` section 26, which sets the conditions, stop rules and exclusions
+  (no paid API runs, cloud spending, broker, real money or Phase 1B scope).
+- Codex reviews one consolidated package after Phase 3; PRs merged in the meantime are marked as not
+  independently reviewed. This supersedes the "merged by the owner" line of D8 for that scope only.
