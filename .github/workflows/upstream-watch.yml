@@ -1,0 +1,46 @@
+name: Upstream release watch
+
+# Weekly check for a TradingAgents release newer than the one SID Trading Firm is
+# pinned to. It only opens an issue; merging upstream is a reviewed sync PR
+# (see docs/sid_trading_firm/development.md), never automatic.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    if: github.repository == 'siddharthatirumala/TradingAgents'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare the latest upstream release with the pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pinned="v$(sed -n 's/^PINNED_UPSTREAM_VERSION = "\(.*\)"/\1/p' sid_trading_firm/upstream.py)"
+          latest="$(gh api repos/TauricResearch/TradingAgents/releases/latest --jq .tag_name)"
+          echo "pinned=$pinned latest=$latest"
+          if [ "$pinned" = "$latest" ]; then
+            echo "Up to date."
+            exit 0
+          fi
+          title="Upstream TradingAgents $latest is available (pinned: $pinned)"
+          if gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number' | grep -q .; then
+            echo "Issue already open."
+            exit 0
+          fi
+          printf '%s\n' \
+            "Upstream released $latest; this fork is pinned to $pinned." \
+            "" \
+            "Follow the upstream sync procedure in docs/sid_trading_firm/development.md:" \
+            "a dedicated sync branch, review of the upstream changes, both test suites green," \
+            "and the pin in sid_trading_firm/upstream.py updated in the same PR." \
+            "" \
+            "https://github.com/TauricResearch/TradingAgents/releases/tag/$latest" > body.md
+          gh issue create --title "$title" --body-file body.md
