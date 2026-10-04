@@ -1,7 +1,7 @@
 import re
 from typing import Any
 
-from langchain_anthropic import ChatAnthropic
+from langchain_anthropic import ChatAnthropic, chat_models as _langchain_anthropic
 
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
@@ -38,6 +38,31 @@ def _supports_effort(model: str) -> bool:
     return (major, minor) >= _EFFORT_MIN_VERSION[family]
 
 
+# Models that reject a forced tool_choice ("any" or a named tool). Used only if
+# langchain-anthropic stops exposing its own check, which is the source of truth.
+_NO_FORCED_TOOL_CHOICE = ("claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5")
+
+
+def supports_forced_tool_choice(model: str) -> bool:
+    """Whether Anthropic accepts a forced tool_choice for ``model``."""
+    check = getattr(_langchain_anthropic, "_supports_forced_tool_choice", None)
+    if callable(check):
+        return check(model)
+    return not model.startswith(_NO_FORCED_TOOL_CHOICE)
+
+
+def structured_output_method(model: str) -> str:
+    """The structured-output method for ``model``: the one place this is decided.
+
+    Models that accept a forced tool call keep LangChain's default
+    (``function_calling``). Models that do not (Claude Sonnet 5.5, Opus 5.5,
+    Fable 5.1) use Claude's native structured outputs (``json_schema``):
+    there the tool call cannot be forced, so the default would let the model
+    answer in prose, fail to parse, and cost a second free-text request.
+    """
+    return "function_calling" if supports_forced_tool_choice(model) else "json_schema"
+
+
 class NormalizedChatAnthropic(ChatAnthropic):
     """ChatAnthropic with normalized content output.
 
@@ -48,6 +73,12 @@ class NormalizedChatAnthropic(ChatAnthropic):
 
     def invoke(self, input, config=None, **kwargs):
         return normalize_content(super().invoke(input, config, **kwargs))
+
+    def with_structured_output(self, schema, *, include_raw=False, method=None, **kwargs):
+        """Structured output by the method that suits this model, unless one is given."""
+        return super().with_structured_output(
+            schema, include_raw=include_raw, method=method or structured_output_method(self.model), **kwargs
+        )
 
 
 class AnthropicClient(BaseLLMClient):
