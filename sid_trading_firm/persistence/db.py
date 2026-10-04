@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from sid_trading_firm.config.settings import Settings
+from sid_trading_firm.persistence.sanitize import sanitize_pending_rows
 
 
 def make_engine(url: str, *, echo: bool = False) -> Engine:
@@ -36,11 +37,16 @@ def engine_from_settings(settings: Settings) -> Engine:
 
 
 class Database:
-    """A session factory with commit-or-rollback scopes."""
+    """A session factory with commit-or-rollback scopes.
+
+    Every session it makes masks credentials in diagnostic columns before each
+    flush (``persistence.sanitize``), so no write path can store one.
+    """
 
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
         self._sessions = sessionmaker(engine, expire_on_commit=False)
+        event.listen(self._sessions, "before_flush", sanitize_pending_rows)
 
     @contextmanager
     def session(self) -> Iterator[Session]:
