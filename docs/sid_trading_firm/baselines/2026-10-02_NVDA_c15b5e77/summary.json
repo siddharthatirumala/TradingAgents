@@ -1,0 +1,221 @@
+{
+  "run_id": "c15b5e77-9b8d-4b56-b58a-0e9479940fa6",
+  "status": "completed",
+  "ticker": "NVDA",
+  "trade_date": "2026-10-02",
+  "signal": "Overweight",
+  "error": null,
+  "wall_seconds": 277.7,
+  "calls": 16,
+  "failed_calls": 0,
+  "input_tokens": 154873,
+  "output_tokens": 41494,
+  "cache_read_tokens": 0,
+  "cost_usd": "0.724686",
+  "calls_without_usage": 0,
+  "calls_unpriced": 0,
+  "label": "UPSTREAM ALL-SONNET BASELINE (AFTER PR #9)",
+  "analysts": [
+    "market",
+    "social",
+    "news",
+    "fundamentals"
+  ],
+  "tool_rounds": 4,
+  "structured_calls": 4,
+  "fallback_calls": 0,
+  "fallback_cost_usd": "0",
+  "calls_at_output_cap": [],
+  "budget_guard": {
+    "authorized_calls": 16,
+    "stops": 0,
+    "run_spend_usd": "0.724686",
+    "run_cap_usd": "3"
+  },
+  "by_agent": {
+    "technical_analyst": {
+      "calls": 3,
+      "input_tokens": 33124,
+      "output_tokens": 4087,
+      "cost_usd": "0.107118",
+      "latency_s": 31.9,
+      "tool_rounds": 2,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "fundamentals_analyst": {
+      "calls": 2,
+      "input_tokens": 9505,
+      "output_tokens": 6923,
+      "cost_usd": "0.088240",
+      "latency_s": 49.7,
+      "tool_rounds": 1,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "news_analyst": {
+      "calls": 2,
+      "input_tokens": 8579,
+      "output_tokens": 3114,
+      "cost_usd": "0.048298",
+      "latency_s": 24.1,
+      "tool_rounds": 1,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "sentiment_analyst": {
+      "calls": 1,
+      "input_tokens": 4396,
+      "output_tokens": 3457,
+      "cost_usd": "0.043362",
+      "latency_s": 26.5,
+      "tool_rounds": 0,
+      "structured_calls": 1,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "bull_researcher": {
+      "calls": 1,
+      "input_tokens": 12578,
+      "output_tokens": 2994,
+      "cost_usd": "0.055096",
+      "latency_s": 27.1,
+      "tool_rounds": 0,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "bear_researcher": {
+      "calls": 1,
+      "input_tokens": 16869,
+      "output_tokens": 7908,
+      "cost_usd": "0.112818",
+      "latency_s": 69.5,
+      "tool_rounds": 0,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "research_manager": {
+      "calls": 1,
+      "input_tokens": 5835,
+      "output_tokens": 1329,
+      "cost_usd": "0.02496",
+      "latency_s": 12.4,
+      "tool_rounds": 0,
+      "structured_calls": 1,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "trader": {
+      "calls": 1,
+      "input_tokens": 6195,
+      "output_tokens": 430,
+      "cost_usd": "0.01669",
+      "latency_s": 5.4,
+      "tool_rounds": 0,
+      "structured_calls": 1,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "aggressive_risk_analyst": {
+      "calls": 1,
+      "input_tokens": 13252,
+      "output_tokens": 2296,
+      "cost_usd": "0.049464",
+      "latency_s": 19.3,
+      "tool_rounds": 0,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "conservative_risk_analyst": {
+      "calls": 1,
+      "input_tokens": 16196,
+      "output_tokens": 3955,
+      "cost_usd": "0.071942",
+      "latency_s": 35.7,
+      "tool_rounds": 0,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "neutral_risk_analyst": {
+      "calls": 1,
+      "input_tokens": 19922,
+      "output_tokens": 3659,
+      "cost_usd": "0.076434",
+      "latency_s": 32.0,
+      "tool_rounds": 0,
+      "structured_calls": 0,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    },
+    "portfolio_manager": {
+      "calls": 1,
+      "input_tokens": 8422,
+      "output_tokens": 1342,
+      "cost_usd": "0.030264",
+      "latency_s": 11.1,
+      "tool_rounds": 0,
+      "structured_calls": 1,
+      "fallback_calls": 0,
+      "fallback_cost_usd": "0",
+      "models": [
+        "anthropic/claude-sonnet-5-5"
+      ]
+    }
+  },
+  "structured_output_fallbacks": {},
+  "budget_stops": [],
+  "models": {
+    "upstream_quick (STANDARD)": "anthropic/claude-sonnet-5-5",
+    "upstream_deep (DEEP)": "anthropic/claude-sonnet-5-5"
+  },
+  "budgets": {
+    "max_ai_cost_per_run_usd": "3",
+    "max_ai_cost_per_day_usd": "10.0",
+    "max_llm_tokens_per_agent": 300000,
+    "max_agent_iterations": 12,
+    "max_debate_rounds": 1,
+    "max_risk_discuss_rounds": 1,
+    "output_token_reserve": 4096,
+    "allow_unpriced_models": false
+  }
+}
