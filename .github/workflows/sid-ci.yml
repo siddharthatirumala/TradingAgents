@@ -1,0 +1,64 @@
+name: SID Trading Firm CI
+
+# Upstream's own workflow (ci.yml) keeps running the TradingAgents suite and ruff
+# over the whole repository. This workflow adds what SID Trading Firm needs on
+# top: its own tests, secret scanning and a clean-install check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: sid-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sid-tests:
+    name: sid tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (dev + sid extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,sid]"
+      - name: Run SID Trading Firm tests
+        run: pytest tests_sid -q
+
+  secret-scan:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  install-check:
+    name: clean install (sid extra)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Fresh install and import
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[sid]"
+          pip check
+          python -c "import sid_trading_firm, tradingagents; print('sid install OK')"

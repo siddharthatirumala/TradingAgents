@@ -39,6 +39,10 @@ dev = [
 bedrock = [
     "langchain-aws>=1.7.9",
 ]
+# SID Trading Firm platform (sid_trading_firm/): pip install -e ".[dev,sid]".
+# An extra, so a plain install pulls in no dependencies beyond upstream's own.
+sid = [
+]
 
 [project.scripts]
 tradingagents = "cli.main:app"
@@ -47,7 +51,7 @@ tradingagents = "cli.main:app"
 version = {attr = "tradingagents.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*", "cli*", "sid_trading_firm*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]
