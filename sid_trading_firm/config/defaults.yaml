@@ -15,16 +15,21 @@ app:
 
 models:
   # Logical tiers. Each names its own provider, so tiers can mix providers.
+  # max_output_tokens bounds every call's worst-case cost; without it some
+  # providers default to very large caps (Anthropic: 128k output tokens).
   tiers:
     fast:
       provider: openai
       model: gpt-6-luna
+      max_output_tokens: 8192
     standard:
       provider: anthropic
       model: claude-sonnet-5-5
+      max_output_tokens: 8192
     deep:
       provider: anthropic
       model: claude-sonnet-5-5
+      max_output_tokens: 8192
   # Agent id -> tier. Every agent that calls a model must be listed.
   agents:
     technical_analyst: standard
