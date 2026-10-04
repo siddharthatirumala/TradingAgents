@@ -1,0 +1,136 @@
+"""Database schema: the record of every run, its model calls and its audit trail.
+
+Every row produced by an analysis carries the run's ``run_id`` so a decision can
+be reconstructed from the database alone. Later phases add decision, order and
+strategy tables alongside these, keyed the same way.
+
+Portable SQL only (PostgreSQL in development and production; SQLite in unit
+tests): JSON becomes JSONB on PostgreSQL, money is NUMERIC, times are
+timezone-aware.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    MetaData,
+    Numeric,
+    String,
+    Text,
+    Uuid,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+# Stable constraint names, so migrations can refer to them.
+NAMING = {
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+JSONType = JSON().with_variant(JSONB(), "postgresql")
+UTCDateTime = DateTime(timezone=True)
+
+RUN_STATUSES = ("running", "completed", "budget_stopped", "failed")
+SEVERITIES = ("debug", "info", "warning", "error", "critical")
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention=NAMING)
+
+
+class ResearchRun(Base):
+    """One execution: an analysis, a measurement, later a backtest or paper-trading cycle."""
+
+    __tablename__ = "research_runs"
+    __table_args__ = (
+        CheckConstraint(f"status IN {RUN_STATUSES}", name="status"),
+        Index(None, "started_at"),
+        Index(None, "instrument", "trade_date"),
+    )
+
+    run_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(20))
+    environment: Mapped[str] = mapped_column(String(16))
+    instrument: Mapped[str | None] = mapped_column(String(16))
+    trade_date: Mapped[date | None] = mapped_column(Date)
+    strategy: Mapped[str | None] = mapped_column(String(64))
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    upstream_version: Mapped[str] = mapped_column(String(32))
+    code_version: Mapped[str | None] = mapped_column(String(64))
+    # Settings in force, secrets masked.
+    config_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    summary: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+    error: Mapped[str | None] = mapped_column(Text)
+
+
+class LLMUsage(Base):
+    """One model call. Token counts are NULL when the provider reported none."""
+
+    __tablename__ = "llm_usage"
+    __table_args__ = (
+        Index(None, "run_id"),
+        Index(None, "started_at"),
+        Index(None, "agent"),
+    )
+
+    call_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("research_runs.run_id", ondelete="RESTRICT"))
+    agent: Mapped[str] = mapped_column(String(64))
+    node: Mapped[str | None] = mapped_column(String(128))
+    provider: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(128))
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    finished_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    latency_ms: Mapped[float] = mapped_column(Float)
+    success: Mapped[bool]
+    input_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    output_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    cache_read_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    cache_write_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    usage_available: Mapped[bool]
+    estimated_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8))
+    cost_status: Mapped[str] = mapped_column(String(16))
+    estimated_input_tokens: Mapped[int] = mapped_column(Integer)
+    prompt_chars: Mapped[int] = mapped_column(Integer)
+    error_type: Mapped[str | None] = mapped_column(String(128))
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class AuditEvent(Base):
+    """Something worth reconstructing later: a run starting or ending, a budget stop, a rejection."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        CheckConstraint(f"severity IN {SEVERITIES}", name="severity"),
+        Index(None, "run_id"),
+        Index(None, "event_type", "occurred_at"),
+    )
+
+    event_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # Null only for events outside any run (for example a configuration error at start-up).
+    run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("research_runs.run_id", ondelete="RESTRICT"))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    event_type: Mapped[str] = mapped_column(String(64))
+    severity: Mapped[str] = mapped_column(String(16))
+    actor: Mapped[str] = mapped_column(String(64))
+    message: Mapped[str] = mapped_column(Text)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
