@@ -17,6 +17,7 @@ CHECKS = [
     checks.check_audit_messages_and_nested_payloads_are_masked,
     checks.check_usage_error_messages_are_masked,
     checks.check_numbers_and_ordinary_text_are_untouched,
+    checks.check_quoted_and_stringified_credentials_are_masked,
 ]
 
 
@@ -94,3 +95,34 @@ def test_sanitize_bounds_deeply_nested_values():
         current["next"] = {}
         current = current["next"]
     assert "omitted" in str(sanitize(deep))
+
+
+QUOTED = "synth" + "-quoted-77"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw, masked", [
+    ("password='" + QUOTED + "'", "password='***'"),
+    ('apikey="' + QUOTED + '"', 'apikey="***"'),
+    ("secret = '" + QUOTED + "'", "secret = '***'"),
+    ('"token": "' + QUOTED + '"', '"token": "***"'),
+    ("{'access_token': '" + QUOTED + "', 'max_tokens': 8192}", "{'access_token': '***', 'max_tokens': 8192}"),
+    ('{"password": "' + QUOTED + '", "input_tokens": 1200}', '{"password": "***", "input_tokens": 1200}'),
+    ("Authorization: Basic " + QUOTED, "Authorization: ***"),
+    ('"Authorization": "Bearer ' + QUOTED + '", "n": 1', '"Authorization": "***", "n": 1'),
+    ('password="a \\"b\\" ' + QUOTED + '"', 'password="***"'),
+    ("pwd: " + QUOTED + ", next=1", "pwd: ***, next=1"),
+])
+def test_quoted_and_stringified_credentials(raw, masked):
+    assert sanitize_text(raw) == masked
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("text", [
+    '{"input_tokens": 1200, "output_tokens": 300, "max_tokens": 8192}',
+    "tokens: 1500, rating Overweight",
+    "password reset failed for user sid",
+    "{'calls': 17, 'cost_usd': '0.800384'}",
+])
+def test_ordinary_diagnostics_are_unchanged(text):
+    assert sanitize_text(text) == text

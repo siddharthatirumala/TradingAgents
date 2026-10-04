@@ -8,9 +8,12 @@ through :func:`sanitize` before it is written, so a credential never lands in a
 research table, whoever produced the text.
 
 Rules:
-- strings: the logging redaction patterns (provider keys, bearer tokens, AWS key
-  ids, ``password=``-style pairs, passwords in URLs), plus any ``*key=``/``*token=``
-  style pair and the user-info part of any URL;
+- strings: any credential-named key followed by ``=`` or ``:`` and a value, with
+  the key bare or quoted and the value bare or quoted (``password='x'``,
+  ``apikey="x"``, ``"token": "x"``, stringified JSON and Python dicts, escaped
+  quotes inside the value); ``Authorization`` values including their scheme
+  (``Basic``/``Bearer``/...); the user-info part of any URL; then the logging
+  redaction patterns (provider keys, bearer tokens, AWS key ids);
 - mappings: the value of a credential-bearing key is replaced whole, whatever its
   type; other values are sanitised recursively;
 - lists and tuples: each item sanitised; other types unchanged.
@@ -38,13 +41,34 @@ _SENSITIVE_KEYS = frozenset({
 _SENSITIVE_SUFFIXES = ("_token", "-token", "_secret", "-secret", "_password", "-password",
                        "_passwd", "_apikey", "_api_key", "-api-key", "_credential", "_credentials")
 
-# key=value / key: value where the key ends in a credential word (access_token=, apikey=...).
+# A key that names a credential: the word itself or any key ending in it
+# (access_token, client_secret, db_password, x-api-key). "input_tokens" does not
+# end in "token", so usage counters are left alone.
+_KEY = r"[A-Za-z0-9_\-]*(?:api[_-]?key|token|secret|password|passwd|passphrase|pwd|credentials?|cookie|dsn)"
+# key=value, key: value, 'key': 'value', "key": "value", key = "va lue" - the key
+# optionally quoted (JSON, Python reprs), the value quoted (either quote, escapes
+# allowed) or a bare run of non-delimiter characters.
 _PAIR = re.compile(
-    r"(?i)([A-Za-z0-9_\-]*(?:api[_-]?key|token|secret|password|passwd|pwd|credential)\s*[=:]\s*)"
-    r"([^\s,;&\"'}\]]+)"
+    r"(?i)(?P<lead>(?P<kq>[\"']?)\b" + _KEY + r"(?P=kq)\s*[=:]\s*)"
+    r"(?:(?P<vq>[\"'])(?:\\.|(?!(?P=vq)).)*(?P=vq)|[^\s,;&\"'}\])]+)"
+)
+# Authorization headers carry "<scheme> <credentials>": mask both words.
+_AUTHORIZATION = re.compile(
+    r"(?i)(?P<lead>(?P<kq>[\"']?)\b(?:proxy-)?authorization(?P=kq)\s*[=:]\s*(?P<vq>[\"']?))"
+    r"(?:(?:basic|bearer|digest|token|negotiate|ntlm)\s+)?[^\s\"',;}\]]+"
 )
 # scheme://user:password@host  and  scheme://token@host
 _URL_USERINFO = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://)[^/\s@]+@")
+
+
+def _mask_pair(match: re.Match) -> str:
+    quote = match.group("vq") or ""
+    return f"{match.group('lead')}{quote}{REDACTED}{quote}"
+
+
+def _mask_authorization(match: re.Match) -> str:
+    # The opening quote is part of the lead; the closing quote is left in the text.
+    return f"{match.group('lead')}{REDACTED}"
 
 
 def is_sensitive_key(key: object) -> bool:
@@ -53,9 +77,10 @@ def is_sensitive_key(key: object) -> bool:
 
 
 def sanitize_text(text: str) -> str:
-    text = redact(text)
+    text = _AUTHORIZATION.sub(_mask_authorization, text)
+    text = _PAIR.sub(_mask_pair, text)
     text = _URL_USERINFO.sub(rf"\g<1>{REDACTED}@", text)
-    return _PAIR.sub(rf"\g<1>{REDACTED}", text)
+    return redact(text)
 
 
 def sanitize(value: Any, _depth: int = 0) -> Any:

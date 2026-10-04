@@ -29,8 +29,23 @@ QUERY_URL = "https://www.alphavantage.co/query?function=OVERVIEW&apikey=" + QUER
 ACCESS_TOKEN = "acc" + "ess-tok-0123456789"
 TOKEN_VALUE = "tok-" + "synthetic-value-77"
 CLIENT_SECRET = "cs-" + "synthetic-9876"
+BASIC_VALUE = "c3lu" + "dGhldGljOnVzZXI="
+QUOTED_PASSWORD = "quoted" + "-synthetic-pw"
 
-SECRETS = (PROVIDER_KEY, DB_PASSWORD, BEARER_VALUE, QUERY_KEY, ACCESS_TOKEN, TOKEN_VALUE, CLIENT_SECRET)
+SECRETS = (PROVIDER_KEY, DB_PASSWORD, BEARER_VALUE, QUERY_KEY, ACCESS_TOKEN, TOKEN_VALUE, CLIENT_SECRET,
+           BASIC_VALUE, QUOTED_PASSWORD)
+
+# Diagnostic text in the shapes exceptions and libraries actually produce.
+QUOTED_DIAGNOSTICS = [
+    f"connect(host='db.internal', user='sid', password='{QUOTED_PASSWORD}')",
+    f'request failed: apikey="{QUERY_KEY}" status=401',
+    f"secret = '{CLIENT_SECRET}'",
+    json.dumps({"password": DB_PASSWORD, "api_key": QUERY_KEY, "input_tokens": 1200, "calls": 15}),
+    repr({"client_secret": CLIENT_SECRET, "access_token": ACCESS_TOKEN, "max_tokens": 8192}),
+    f'{{"headers": {{"Authorization": "Bearer {BEARER_VALUE}"}}, "token": "{TOKEN_VALUE}"}}',
+    f"Authorization: Basic {BASIC_VALUE}",
+    'password="with \\"escaped\\" quotes ' + QUOTED_PASSWORD + '"',
+]
 
 
 def _stored(db, sql: str) -> str:
@@ -120,6 +135,40 @@ def check_numbers_and_ordinary_text_are_untouched(db):
                "note": "tokens: 1500, rating Overweight", "agents": ["technical_analyst", "cio"]}
     runs.finish(run_id, status="completed", summary=summary)
     assert runs.get(run_id).summary == summary
+
+
+def check_quoted_and_stringified_credentials_are_masked(db):
+    """password='...', apikey="...", JSON and Python-repr dictionaries in every text column."""
+    runs, run_id = _start(db)
+    blob = " | ".join(QUOTED_DIAGNOSTICS)
+    runs.finish(run_id, status="failed", error=blob,
+                summary={"last_error": blob, "attempts": QUOTED_DIAGNOSTICS, "input_tokens": 1200,
+                         "output_tokens": 300, "max_tokens": 8192, "cost_usd": "0.004"})
+    AuditLog(db).record("vendor.error", blob, run_id=run_id, payload={"raw": QUOTED_DIAGNOSTICS, "retries": 2})
+    now = datetime.now(UTC)
+    SqlUsageStore(db).add(LLMCallRecord(
+        run_id=run_id, agent="cio", provider="anthropic", model="claude-sonnet-5-5", started_at=now,
+        finished_at=now, latency_ms=10.0, success=False, input_tokens=None, output_tokens=None,
+        cache_read_tokens=None, cache_write_tokens=None, usage_available=False, estimated_cost_usd=None,
+        cost_status=CostStatus.NO_USAGE, estimated_input_tokens=100, prompt_chars=300,
+        error_type="ValueError", error_message=blob))
+
+    run_id_sql = _uuid_literal(db, run_id)
+    for sql in (f"SELECT error, summary FROM research_runs WHERE run_id = '{run_id_sql}'",
+                f"SELECT message, payload FROM audit_events WHERE run_id = '{run_id_sql}'",
+                f"SELECT error_message FROM llm_usage WHERE run_id = '{run_id_sql}'"):
+        _assert_masked(_stored(db, sql))
+
+    # Numbers survive, both as values and inside the stringified diagnostics.
+    row = runs.get(run_id)
+    assert (row.summary["input_tokens"], row.summary["output_tokens"], row.summary["max_tokens"]) == (1200, 300, 8192)
+    assert row.summary["cost_usd"] == "0.004"
+    stored_error = _stored(db, f"SELECT error FROM research_runs WHERE run_id = '{run_id_sql}'")
+    for kept in ('\\"input_tokens\\": 1200', '\\"calls\\": 15', "'max_tokens': 8192", "status=401",
+                 "host='db.internal'"):
+        assert kept in stored_error, kept
+    audit = AuditLog(db).for_run(run_id)[0]
+    assert audit.payload["retries"] == 2
 
 
 def _uuid_literal(db, run_id: str) -> str:
