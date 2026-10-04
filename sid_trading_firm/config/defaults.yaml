@@ -1,0 +1,80 @@
+# SID Trading Firm built-in defaults: the lowest-priority configuration source.
+#
+# Override in your own YAML file (SID_CONFIG_FILE or load_settings(config_file=...))
+# or with environment variables: SID_<GROUP>__<FIELD>, for example
+#   SID_BUDGETS__MAX_AI_COST_PER_RUN_USD=2.50
+#   SID_MODELS__TIERS__DEEP__PROVIDER=openai
+#   SID_MODELS__TIERS__DEEP__MODEL=gpt-6-sol
+# Precedence: explicit arguments > environment > .env > your YAML file > this file.
+
+app:
+  name: SID Trading Firm
+  environment: development
+  market_scope: us_equities
+  live_trading_enabled: false   # cannot be enabled: validation rejects true
+
+models:
+  # Logical tiers. Each names its own provider, so tiers can mix providers.
+  tiers:
+    fast:
+      provider: openai
+      model: gpt-6-luna
+    standard:
+      provider: anthropic
+      model: claude-sonnet-5-5
+    deep:
+      provider: anthropic
+      model: claude-sonnet-5-5
+  # Agent id -> tier. Every agent that calls a model must be listed.
+  agents:
+    technical_analyst: standard
+    fundamentals_analyst: standard
+    news_analyst: standard
+    macro_analyst: standard
+    market_regime_analyst: standard
+    sentiment_analyst: fast
+    bull_researcher: standard
+    bear_researcher: standard
+    quant_validator: standard
+    trader: standard
+    aggressive_risk_analyst: standard
+    conservative_risk_analyst: standard
+    neutral_risk_analyst: standard
+    risk_manager: standard
+    research_manager: deep
+    portfolio_manager: deep
+    cio: deep
+    reflector: fast
+    extractor: fast
+
+# Spending and effort caps. Placeholders until the baseline measurement; every
+# cap is finite and enforced before each model call (fail closed).
+budgets:
+  max_ai_cost_per_run_usd: 3.00
+  max_ai_cost_per_day_usd: 10.00
+  max_llm_tokens_per_agent: 300000
+  max_agent_iterations: 12
+  max_debate_rounds: 1
+  max_risk_discuss_rounds: 1
+  output_token_reserve: 4096
+  allow_unpriced_models: false
+
+# Hard-risk placeholders. Deliberately unset: the hard risk engine (later phase)
+# rejects every proposal while any of these is missing.
+risk:
+  max_position_pct: null
+  max_daily_loss_pct: null
+  max_drawdown_pct: null
+  max_sector_exposure_pct: null
+  max_open_positions: null
+  max_trades_per_day: null
+  min_avg_daily_volume: null
+  max_data_age_seconds: null
+
+database:
+  url: null        # set SID_DATABASE__URL in .env
+  echo: false
+
+logging:
+  level: INFO
+  format: json

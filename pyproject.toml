@@ -42,6 +42,9 @@ bedrock = [
 # SID Trading Firm platform (sid_trading_firm/): pip install -e ".[dev,sid]".
 # An extra, so a plain install pulls in no dependencies beyond upstream's own.
 sid = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.6",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -56,6 +59,7 @@ include = ["tradingagents*", "cli*", "sid_trading_firm*"]
 [tool.setuptools.package-data]
 cli = ["static/*"]
 tradingagents = ["assets/*.svg"]
+sid_trading_firm = ["config/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

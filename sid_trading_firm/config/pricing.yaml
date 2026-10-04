@@ -1,0 +1,51 @@
+# Model prices used to estimate LLM cost, in USD per million tokens.
+#
+# Keyed "<provider>/<model>". A model missing here is "unpriced": its calls are
+# recorded with no cost, and the budget guard refuses them unless
+# budgets.allow_unpriced_models is true. Update this file when providers change
+# prices; never put prices in code.
+#
+# cache_read / cache_write: prompt-cache rates. Anthropic's cache_write is the
+# 5-minute cache write rate.
+
+pricing:
+  anthropic/claude-sonnet-5-5:
+    input_per_mtok: "2.00"
+    output_per_mtok: "10.00"
+    cache_read_per_mtok: "0.20"
+    cache_write_per_mtok: "2.50"
+    source: https://platform.claude.com/docs/en/about-claude/pricing
+    as_of: 2026-10-04
+    verified: true
+  anthropic/claude-opus-5-5:
+    input_per_mtok: "4.00"
+    output_per_mtok: "20.00"
+    cache_read_per_mtok: "0.20"
+    cache_write_per_mtok: "5.00"
+    source: https://platform.claude.com/docs/en/about-claude/pricing
+    as_of: 2026-10-04
+    verified: true
+  anthropic/claude-haiku-4-5:
+    input_per_mtok: "1.00"
+    output_per_mtok: "5.00"
+    cache_read_per_mtok: "0.10"
+    cache_write_per_mtok: "1.25"
+    source: https://platform.claude.com/docs/en/about-claude/pricing
+    as_of: 2026-10-04
+    verified: true
+  # OpenAI rates as reported at launch (2026-09-22) by third-party coverage;
+  # confirm on OpenAI's pricing page before relying on them.
+  openai/gpt-6-luna:
+    input_per_mtok: "0.10"
+    output_per_mtok: "0.50"
+    cache_read_per_mtok: "0.01"
+    source: https://www.yottalabs.ai/post/gpt-6-sol-luna-pricing-vs-astra-open-models-2026
+    as_of: 2026-10-04
+    verified: false
+  openai/gpt-6-sol:
+    input_per_mtok: "2.00"
+    output_per_mtok: "10.00"
+    cache_read_per_mtok: "0.20"
+    source: https://www.yottalabs.ai/post/gpt-6-sol-luna-pricing-vs-astra-open-models-2026
+    as_of: 2026-10-04
+    verified: false
