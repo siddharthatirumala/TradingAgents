@@ -1,0 +1,39 @@
+[anchor] origin/main == 059b9ffad6889b4909b4236d136d2619f8e745ec
+[ancestry] first-parent chain matches (anchor -> governance x2 -> #3 -> #2 -> #1 -> upstream pin); 1d23b80 in main
+[governance] AGENTS.md=2ff76018acf612058e36daab108cca931c9c8e8d docs/GOVERNANCE.md=4cb8ff105c7630b23bf6565aedee308b52ee2c30; anchor tree = 1d23b80 tree + exactly these two
+[identity] open, head=d4f992f3b5f4ebbb60a0b45a37b2f3d864e9b1a0, current base=sid/p1-04-baseline-harness@1d23b80 (not retargeted: paused)
+[commits] unique vs main: d4f992f
+           d4f992f Add PostgreSQL persistence foundation
+[diff] 15 files changed, 901 insertions(+), 2 deletions(-) (own delta == diff vs main == GitHub Files Changed)
+            .env.example                                                    |   3 +
+            .github/workflows/sid-ci.yml                                    |  18 +++-
+            compose.sid.yaml                                                |  27 ++++++
+            pyproject.toml                                                  |  10 +-
+            sid_trading_firm/persistence/__init__.py                        |   6 ++
+            sid_trading_firm/persistence/db.py                              |  55 +++++++++++
+            sid_trading_firm/persistence/migrate.py                         |  59 ++++++++++++
+            sid_trading_firm/persistence/migrations/env.py                  |  35 +++++++
+            sid_trading_firm/persistence/migrations/script.py.mako          |  23 +++++
+            .../persistence/migrations/versions/0001_initial.py             | 100 ++++++++++++++++++++
+            sid_trading_firm/persistence/models.py                          | 136 +++++++++++++++++++++++++++
+            sid_trading_firm/persistence/repositories.py                    | 140 ++++++++++++++++++++++++++++
+            tests_sid/persistence_checks.py                                 | 125 +++++++++++++++++++++++++
+            tests_sid/test_persistence.py                                   |  67 +++++++++++++
+            tests_sid/test_persistence_postgres.py                          |  99 ++++++++++++++++++++
+            15 files changed, 901 insertions(+), 2 deletions(-)
+[duplication] PR edits earlier Phase 1A files (incremental, not duplicated): .env.example .github/workflows/sid-ci.yml pyproject.toml
+[merge] conflict-free; merged tree = PR head tree + exactly the two governance blobs (entry-by-entry ls-tree)
+[upstream] 1 failed, 1258 passed, 4 skipped, 1 deselected, 20 warnings, 99 subtests passed in 56.91s
+           ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+           tests collected=1263 passed=1357 failed=1
+           RESULT: PASS
+[sid] 114 passed, 9 deselected, 3 warnings in 23.67s (Postgres integration deselected locally: runs in CI)
+[migrations] upgrade-> ['alembic_version', 'audit_events', 'llm_usage', 'research_runs'] | downgrade-> ['alembic_version'] | re-upgrade ok
+[ruff] All checks passed!
+[reproduction] tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome on main+PR#5: 5/30 failed, all 5 accepted by the exception checker
+[ci] 'CI' run 37223667003 (attempt 2, head d4f992f: ruff (strict, full repo)=success, tests (py3.12, America/New_York)=success, clean-install smoke=success, tests (py3.13)=success, tests (py3.11)=success, tests (py3.14)=success)
+[ci] 'SID Trading Firm CI' run 37223667019 (attempt 2, head d4f992f: clean install (sid extra)=success, gitleaks=success, sid tests (py3.11)=success, sid tests (py3.13)=success)
+[ci] SID py3.13 unit | postgres: 114 passed, 9 deselected, 3 warnings in 3.79s|9 passed, 114 deselected in 1.50s|
+[ci] 10/10 jobs passed; runs test the PR head merged with its current base sid/p1-04-baseline-harness@1d23b80 (tree == main minus the two governance docs)
+[anchor] origin/main still == 059b9ffad6889b4909b4236d136d2619f8e745ec after validation
+VALIDATED (review only: not merged, not retargeted)
