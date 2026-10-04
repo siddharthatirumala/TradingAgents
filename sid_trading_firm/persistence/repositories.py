@@ -106,7 +106,8 @@ class SqlUsageStore:
                 usage_available=record.usage_available, estimated_cost_usd=record.estimated_cost_usd,
                 cost_status=record.cost_status.value, estimated_input_tokens=record.estimated_input_tokens,
                 prompt_chars=record.prompt_chars, error_type=record.error_type,
-                error_message=record.error_message,
+                error_message=record.error_message, structured_method=record.structured_method,
+                tools_offered=record.tools_offered, tool_calls=record.tool_calls,
             ))
 
     def spent_usd(self, *, run_id: str | None = None, day: date | None = None) -> Decimal:
@@ -136,5 +137,7 @@ def _to_record(row: LLMUsage) -> LLMCallRecord:
         cache_write_tokens=row.cache_write_tokens, usage_available=row.usage_available,
         estimated_cost_usd=row.estimated_cost_usd, cost_status=CostStatus(row.cost_status),
         estimated_input_tokens=row.estimated_input_tokens, prompt_chars=row.prompt_chars,
-        error_type=row.error_type, error_message=row.error_message, call_id=str(row.call_id),
+        error_type=row.error_type, error_message=row.error_message,
+        structured_method=row.structured_method, tools_offered=row.tools_offered,
+        tool_calls=row.tool_calls, call_id=str(row.call_id),
     )

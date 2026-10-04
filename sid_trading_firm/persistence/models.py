@@ -113,6 +113,9 @@ class LLMUsage(Base):
     prompt_chars: Mapped[int] = mapped_column(Integer)
     error_type: Mapped[str | None] = mapped_column(String(128))
     error_message: Mapped[str | None] = mapped_column(Text)
+    structured_method: Mapped[str | None] = mapped_column(String(32))
+    tools_offered: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    tool_calls: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class AuditEvent(Base):

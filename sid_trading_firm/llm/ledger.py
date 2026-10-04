@@ -49,6 +49,8 @@ class _Pending:
     prompt_chars: int
     started_at: datetime
     t0: float
+    structured_method: str | None = None
+    tools_offered: int = 0
 
 
 def resolve_agent(metadata: dict[str, Any] | None) -> tuple[str, str | None]:
@@ -83,6 +85,20 @@ def _message_chars(message: Any) -> int:
     if tool_calls:
         chars += len(json.dumps(tool_calls, default=str))
     return chars
+
+
+def _structured_method(kwargs: dict[str, Any]) -> str | None:
+    """The structured-output method LangChain bound for this call, if any."""
+    fmt = (kwargs.get("options") or {}).get("ls_structured_output_format") or {}
+    method = (fmt.get("kwargs") or {}).get("method")
+    return str(method) if method else ("unspecified" if fmt else None)
+
+
+def _tool_calls(response: LLMResult) -> int:
+    try:
+        return len(getattr(response.generations[0][0].message, "tool_calls", None) or [])
+    except (IndexError, AttributeError, TypeError):
+        return 0
 
 
 def _usage(response: LLMResult) -> TokenUsage | None:
@@ -138,7 +154,7 @@ class UsageLedger(BaseCallbackHandler):
             return
         usage = _usage(response)
         cost = cost_of(usage, self.guard.pricing.get(f"{pending.provider}/{pending.model}"))
-        self._finish(pending, success=True, usage=usage, cost=cost)
+        self._finish(pending, success=True, usage=usage, cost=cost, tool_calls=_tool_calls(response))
 
     def on_llm_error(self, error: BaseException, *, run_id: UUID, **kwargs: Any) -> None:
         pending = self._pop(run_id)
@@ -161,14 +177,15 @@ class UsageLedger(BaseCallbackHandler):
         )
         with self._lock:
             self._pending[lc_run_id] = _Pending(auth, provider, model, node, prompt_chars,
-                                                datetime.now(UTC), time.perf_counter())
+                                                datetime.now(UTC), time.perf_counter(),
+                                                _structured_method(kwargs), len(params.get("tools") or ()))
 
     def _pop(self, lc_run_id: UUID) -> _Pending | None:
         with self._lock:
             return self._pending.pop(lc_run_id, None)
 
     def _finish(self, p: _Pending, *, success: bool, usage: TokenUsage | None, cost,
-                error: BaseException | None = None) -> None:
+                error: BaseException | None = None, tool_calls: int = 0) -> None:
         record = LLMCallRecord(
             run_id=p.auth.run_id,
             agent=p.auth.agent,
@@ -190,6 +207,9 @@ class UsageLedger(BaseCallbackHandler):
             prompt_chars=p.prompt_chars,
             error_type=type(error).__name__ if error else None,
             error_message=redact(str(error))[:500] if error else None,
+            structured_method=p.structured_method,
+            tools_offered=p.tools_offered,
+            tool_calls=tool_calls,
             call_id=p.auth.call_id,
         )
         if success and usage is None:

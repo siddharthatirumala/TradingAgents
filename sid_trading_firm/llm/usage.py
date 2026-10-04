@@ -44,6 +44,11 @@ class LLMCallRecord:
     node: str | None = None
     error_type: str | None = None
     error_message: str | None = None
+    # How the call was made: the structured-output method if any ("json_schema",
+    # "function_calling"), how many tools were offered, how many it called.
+    structured_method: str | None = None
+    tools_offered: int = 0
+    tool_calls: int = 0
     call_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     @property

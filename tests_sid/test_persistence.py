@@ -65,3 +65,7 @@ def test_ledger_without_a_run_row_stops_the_run(db):
 
 def test_secrets_are_not_stored(db, monkeypatch):
     checks.check_secrets_are_not_stored(db, monkeypatch)
+
+
+def test_call_details_round_trip(db):
+    checks.check_call_details_round_trip(db)

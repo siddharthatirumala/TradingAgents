@@ -97,3 +97,7 @@ def test_downgrade_and_upgrade_round_trip():
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}
     engine.dispose()
     upgrade(URL)
+
+
+def test_call_details_round_trip(db):
+    checks.check_call_details_round_trip(db)
