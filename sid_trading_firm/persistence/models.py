@@ -183,6 +183,8 @@ class BacktestResultRow(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSONType)
     metrics: Mapped[dict[str, Any]] = mapped_column(JSONType)
     regimes: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+    # Equity curve of the segment: {"dates": [...ISO dates], "values": [...]} (migration 0005).
+    equity: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
 

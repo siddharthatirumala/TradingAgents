@@ -2,8 +2,13 @@
 # Validate and merge one PR under delegated merge authority (docs/GOVERNANCE.md section 26).
 # Halts (exit 1) on any unexpected condition. Merge commit only; never force-push; keeps branches.
 #
-# usage: merge_pr.sh <pr> <expected-head-short> <expected-main-sha> "<expected unique commits>" [allow-governance]
+# usage: PHASE=<validation phase> merge_pr.sh <pr> <expected-head-short> <expected-main-sha> "<expected unique commits>" [allow-governance]
+#
+# RETIRED 2026-10-05: delegated merge authority ended with the consolidated review (Codex verdict
+# CHANGE REQUIRED). Kept as evidence of how #5-#26 were merged; do not use it to merge without new
+# owner authority. The checker call below was updated to the fail-closed interface.
 set -u
+PHASE=${PHASE:?set PHASE to the validation phase (exceptions apply only within their recorded scope)}
 N=$1; HEAD_EXP=$2; MAIN_EXP=$3; COMMITS_EXP=$4; ALLOW_GOV=${5:-no}
 R=siddharthatirumala/TradingAgents
 REPO="<HOME>/OneDrive/Desktop/Stories/projects/TradingAgents"
@@ -65,8 +70,9 @@ where=$("$PY" -c "import tradingagents, sid_trading_firm; print(tradingagents.__
 case "$where" in *"wt-merge-pr$N"*"wt-merge-pr$N"*) ;; *) stop "imports resolve outside the worktree";; esac
 export PYTHONPATH="$RV"
 SID_VALIDATION_REPORT="$RV/evidence/merge_pr${N}_upstream.jsonl" "$PY" -m pytest -q -p no:cacheprovider -p sid_validation_plugin > "$RV/evidence/merge_pr${N}_upstream.txt" 2>&1
-say "[upstream] $(tail -1 "$RV/evidence/merge_pr${N}_upstream.txt")"
-"$PY" "$RV/check_upstream_failures.py" "$RV/evidence/merge_pr${N}_upstream.jsonl" "$RV/windows_exceptions.json" > "$RV/evidence/merge_pr${N}_check.txt"
+pytest_code=$?
+say "[upstream] $(tail -1 "$RV/evidence/merge_pr${N}_upstream.txt") (exit $pytest_code)"
+"$PY" "$RV/check_upstream_failures.py" "$RV/evidence/merge_pr${N}_upstream.jsonl" "$RV/windows_exceptions.json"   --pytest-exit-code "$pytest_code" --phase "$PHASE" --gate-records "$WT/docs/PHASES.md" > "$RV/evidence/merge_pr${N}_check.txt"
 ok=$?; sed 's/^/           /' "$RV/evidence/merge_pr${N}_check.txt"
 [ $ok = 0 ] || stop "upstream suite failed the exception checker"
 sid=$("$PY" -m pytest tests_sid -q -p no:cacheprovider 2>&1 | tail -1)

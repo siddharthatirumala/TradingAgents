@@ -119,7 +119,17 @@ def test_cli_writes_report_and_stores_the_screen(workspace, monkeypatch):
     (row,) = repo.results_for_run(str(uuid.UUID(str(run_id))))
     saved = json.loads((out / "results.json").read_text(encoding="utf-8"))
     assert [c.symbol for c in repo.candidates(row.id)] == [c["symbol"] for c in saved["selected"]]
+    run_id = str(uuid.UUID(str(run_id)))
+    assert saved["persistence"] == {"status": "stored", "run_id": run_id}
+    assert f"research run `{run_id}`" in (out / "report.md").read_text(encoding="utf-8")
     engine.dispose()
+
+
+def test_without_database_the_files_say_they_are_not_stored(workspace):
+    tmp, spec_file = workspace
+    assert runner.main([str(spec_file), "--out", str(tmp / "out")]) == 0
+    saved = json.loads((tmp / "out" / "results.json").read_text(encoding="utf-8"))
+    assert saved["persistence"] == {"status": "not_requested", "run_id": None}
 
 
 def test_a_storage_failure_marks_the_run_failed(workspace, monkeypatch):
@@ -134,17 +144,26 @@ def test_a_storage_failure_marks_the_run_failed(workspace, monkeypatch):
     upgrade(url)
     monkeypatch.setenv("SID_DATABASE__URL", url)
 
+    secret = "synth" + "-screen-pw-41"
+
     def broken(self, **kwargs):
-        raise RuntimeError("disk full")
+        raise RuntimeError(f"disk full; password='{secret}'")
 
     monkeypatch.setattr(ScreeningRepository, "record", broken)
+    out = tmp / "out"
     with pytest.raises(RuntimeError, match="disk full"):
-        runner.main([str(spec_file), "--out", str(tmp / "out"), "--database"])
+        runner.main([str(spec_file), "--out", str(out), "--database"])
     engine = make_engine(url)
     with engine.connect() as c:
-        status, error = c.execute(text("SELECT status, error FROM research_runs")).one()
+        run_id, status, error = c.execute(text("SELECT run_id, status, error FROM research_runs")).one()
     engine.dispose()
     assert status == "failed" and "disk full" in error
+    saved = json.loads((out / "results.json").read_text(encoding="utf-8"))
+    assert saved["persistence"]["status"] == "failed"
+    assert saved["persistence"]["run_id"] == str(uuid.UUID(str(run_id)))
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert report.splitlines()[2].startswith("> **STORAGE FAILED.")
+    assert secret not in report and secret not in (out / "results.json").read_text(encoding="utf-8")
 
 
 def test_the_example_specification_in_the_repository_is_valid():

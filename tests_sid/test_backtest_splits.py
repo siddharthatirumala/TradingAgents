@@ -6,7 +6,15 @@ import pytest
 
 from sid_trading_firm.backtest.data import PricePanel
 from sid_trading_firm.backtest.engine import BacktestConfig, BacktestError
-from sid_trading_firm.backtest.splits import chronological_split, walk_forward, walk_forward_windows
+from sid_trading_firm.backtest.splits import (
+    Period,
+    WalkForwardError,
+    Window,
+    chronological_split,
+    validate_windows,
+    walk_forward,
+    walk_forward_windows,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -96,7 +104,7 @@ def test_best_training_score_is_chosen_and_ties_keep_grid_order():
     panel = trending_panel()
     windows = walk_forward_windows(panel.calendar(), train_days=40, test_days=20)
     assert len(windows) == 4                                        # 120 dates: windows start at 0, 20, 40, 60
-    scores = iter([1.0, 2.0, 3.0, 3.0, None, None, 0.5, 0.1])
+    scores = iter([1.0, 2.0, 3.0, 3.0, None, 0.2, 0.5, 0.1])
 
     def objective(report):
         return next(scores)
@@ -104,9 +112,63 @@ def test_best_training_score_is_chosen_and_ties_keep_grid_order():
     result = walk_forward(panel, Spy, [{"symbol": "A"}, {"symbol": "B"}], CFG, windows, objective=objective)
     assert result.outcomes[0].chosen_params == {"symbol": "B"}        # 2.0 beats 1.0
     assert result.outcomes[1].chosen_params == {"symbol": "A"}        # tie at 3.0: first in grid
-    assert result.outcomes[2].chosen_params is None                    # nothing defined
-    assert "no parameter set" in result.outcomes[2].note
+    assert result.outcomes[2].chosen_params == {"symbol": "B"}        # the only defined score
     assert result.outcomes[3].chosen_params == {"symbol": "A"}        # 0.5 beats 0.1
+
+
+@pytest.mark.parametrize("undefined", [None, float("nan"), float("inf"), float("-inf"), "1.0", True])
+def test_a_window_with_no_finite_objective_refuses_the_whole_walk_forward(undefined):
+    panel = trending_panel()
+    windows = walk_forward_windows(panel.calendar(), train_days=40, test_days=20)
+    scores = iter([1.0, 2.0, undefined, undefined])        # window 2: neither parameter set is usable
+
+    def objective(report):
+        return next(scores)
+
+    with pytest.raises(WalkForwardError, match="no parameter set had a finite objective"):
+        walk_forward(panel, Spy, [{"symbol": "A"}, {"symbol": "B"}], CFG, windows, objective=objective)
+
+
+def test_a_non_finite_score_never_beats_a_finite_one():
+    panel = trending_panel()
+    windows = walk_forward_windows(panel.calendar(), train_days=40, test_days=20)[:1]
+    scores = iter([float("nan"), 0.1])
+
+    result = walk_forward(panel, Spy, [{"symbol": "A"}, {"symbol": "B"}], CFG, windows,
+                          objective=lambda report: next(scores))
+    assert result.outcomes[0].chosen_params == {"symbol": "B"}
+
+
+def _w(cal, train, test):
+    return Window(Period(cal[train[0]], cal[train[1]]), Period(cal[test[0]], cal[test[1]]))
+
+
+@pytest.mark.parametrize("make, message", [
+    (lambda c: [], "no walk-forward windows"),
+    (lambda c: [_w(c, (0, 39), (39, 59))], "training ending before testing starts"),          # shares a date
+    (lambda c: [_w(c, (0, 39), (30, 59))], "training ending before testing starts"),          # test inside train
+    (lambda c: [_w(c, (20, 10), (40, 59))], "training ending before testing starts"),         # reversed train
+    (lambda c: [_w(c, (0, 39), (59, 40))], "training ending before testing starts"),          # reversed test
+    (lambda c: [_w(c, (0, 39), (40, 59)), _w(c, (10, 49), (55, 74))], "overlaps"),
+    (lambda c: [_w(c, (20, 59), (60, 79)), _w(c, (0, 39), (40, 59))], "chronological order"),
+    (lambda c: [_w(c, (0, 39), (40, 40))], "fewer than two trading dates"),
+    (lambda c: [Window(Period(c[0], c[39]), Period(c[40] + pd.Timedelta(hours=1), c[59]))], "trading dates"),
+    (lambda c: [Window(Period(c[0], c[39]), Period(c[40], c[-1] + pd.Timedelta(days=30)))], "trading dates"),
+])
+def test_invalid_windows_are_refused_at_the_evaluation_boundary(make, message):
+    panel = trending_panel()
+    windows = make(panel.calendar())
+    with pytest.raises(WalkForwardError, match=message):
+        validate_windows(windows, panel.calendar())
+    if windows:
+        with pytest.raises(WalkForwardError, match=message):
+            walk_forward(panel, Spy, [{"symbol": "A"}], CFG, windows)
+
+
+def test_windows_built_by_walk_forward_windows_are_valid():
+    panel = trending_panel()
+    for step in (20, 25, 40):
+        validate_windows(walk_forward_windows(panel.calendar(), 40, 20, step), panel.calendar())
 
 
 def test_out_of_sample_curve_contains_test_windows_only_and_compounds():

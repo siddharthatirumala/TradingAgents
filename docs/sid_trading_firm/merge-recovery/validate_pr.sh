@@ -2,8 +2,9 @@
 # Review-mode validation of one Phase 1A PR against an anchored main. Never merges, retargets or pushes.
 # Exits non-zero (STOP) on any unexpected condition.
 #
-# usage: validate_pr.sh <pr> <expected-head> <previous-pr-head> "<expected unique commits>" <anchor-main-sha>
+# usage: PHASE=<validation phase> validate_pr.sh <pr> <expected-head> <previous-pr-head> "<expected unique commits>" <anchor-main-sha>
 set -u
+PHASE=${PHASE:?set PHASE to the validation phase (exceptions apply only within their recorded scope)}
 N=$1; HEAD_EXP=$2; PREV=$3; COMMITS_EXP=$4; ANCHOR=$5
 R=siddharthatirumala/TradingAgents
 REPO="<HOME>/OneDrive/Desktop/Stories/projects/TradingAgents"
@@ -85,9 +86,12 @@ where=$("$PY" -c "import tradingagents, sid_trading_firm; print(tradingagents.__
 case "$where" in *"wt-pr$N"*"wt-pr$N"*) ;; *) stop "imports resolve outside the worktree";; esac
 export PYTHONPATH="$RV"
 SID_VALIDATION_REPORT="$RV/evidence/pr${N}_upstream.jsonl" "$PY" -m pytest -q -p no:cacheprovider -p sid_validation_plugin > "$RV/evidence/pr${N}_upstream.txt" 2>&1
-say "[upstream] $(tail -1 "$RV/evidence/pr${N}_upstream.txt")"
-"$PY" "$RV/check_upstream_failures.py" "$RV/evidence/pr${N}_upstream.jsonl" "$RV/windows_exceptions.json" | sed 's/^/           /'
-"$PY" "$RV/check_upstream_failures.py" "$RV/evidence/pr${N}_upstream.jsonl" "$RV/windows_exceptions.json" >/dev/null || stop "upstream suite failed the exception checker"
+pytest_code=$?
+say "[upstream] $(tail -1 "$RV/evidence/pr${N}_upstream.txt") (exit $pytest_code)"
+check_args=(--pytest-exit-code "$pytest_code" --phase "$PHASE" --gate-records "$WT/docs/PHASES.md")
+"$PY" "$RV/check_upstream_failures.py" "$RV/evidence/pr${N}_upstream.jsonl" "$RV/windows_exceptions.json" "${check_args[@]}" > "$RV/evidence/pr${N}_check.txt"
+check_code=$?; sed 's/^/           /' "$RV/evidence/pr${N}_check.txt"
+[ $check_code = 0 ] || stop "upstream suite failed the exception checker"
 sid=$(SID_VALIDATION_REPORT="$RV/evidence/pr${N}_sid.jsonl" "$PY" -m pytest tests_sid -q -p no:cacheprovider -p sid_validation_plugin 2>&1 | tail -1)
 echo "$sid" | grep -qE "failed|error" && stop "SID suite: $sid"
 echo "$sid" | grep -q "passed" || stop "SID suite produced no result: $sid"
@@ -111,8 +115,10 @@ say "[ruff] $lint"
 acc=0; rej=0; fails=0
 for i in $(seq 1 30); do
   rpt="$RV/evidence/pr${N}_flaky_$i.jsonl"
-  if SID_VALIDATION_REPORT="$rpt" "$PY" -m pytest -q -p no:cacheprovider -p sid_validation_plugin "$FLAKY" >/dev/null 2>&1; then rm -f "$rpt"
-  else fails=$((fails+1)); "$PY" "$RV/check_upstream_failures.py" "$rpt" "$RV/windows_exceptions.json" >/dev/null && acc=$((acc+1)) || rej=$((rej+1)); fi
+  SID_VALIDATION_REPORT="$rpt" "$PY" -m pytest -q -p no:cacheprovider -p sid_validation_plugin "$FLAKY" >/dev/null 2>&1
+  code=$?
+  if [ $code = 0 ]; then rm -f "$rpt"
+  else fails=$((fails+1)); "$PY" "$RV/check_upstream_failures.py" "$rpt" "$RV/windows_exceptions.json"          --pytest-exit-code "$code" --phase "$PHASE" --gate-records "$WT/docs/PHASES.md" >/dev/null && acc=$((acc+1)) || rej=$((rej+1)); fi
 done
 [ "$rej" = 0 ] || stop "$rej concurrency failure(s) on main+PR#$N did not match the exception signature"
 say "[reproduction] $FLAKY on main+PR#$N: $fails/30 failed, all $acc accepted by the exception checker"

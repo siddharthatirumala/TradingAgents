@@ -51,8 +51,12 @@ python -m sid_trading_firm.backtest.run docs/sid_trading_firm/examples/backtest_
 ```
 
 The report states its assumptions and limitations (adjusted prices, survivorship
-bias, cost assumptions, in-sample versus out-of-sample). Add `--database` to store
-the results (needs `SID_DATABASE__URL`). Signals use data up to each decision date
+bias, cost assumptions, in-sample versus out-of-sample). Beside it go `results.json`
+and equity-curve CSVs (one per segment, and the stitched out-of-sample curve next to
+the benchmark held over the same windows). Add `--database` to store the results
+first (needs `SID_DATABASE__URL`); the files then carry the database `run_id`, and if
+storing fails they are written marked as not stored and the command exits with the
+error. Signals use data up to each decision date
 and orders fill at the next open; this is simulation only and never places an order.
 
 ## Deterministic screening
