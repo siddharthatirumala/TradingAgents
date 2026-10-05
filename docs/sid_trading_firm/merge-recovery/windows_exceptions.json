@@ -1,11 +1,13 @@
 {
   "schema": 1,
+  "scope_note": "Each exception's 'scope' restates its applies_to and expiry_condition in machine-readable form for check_upstream_failures.py: it applies only to validation phase '1A-merge-recovery' and ends when the Phase 1A gate record exists in docs/PHASES.md (merged in PR #11, de36afd) or on 'expires', whichever is first. Added 2026-10-05 after the consolidated review; the scope is unchanged and not extended.",
   "applies_to": "local Windows validation during the Phase 1A merge recovery only; GitHub Linux CI must pass these tests unmodified",
   "exceptions": [
     {
       "id": "WIN-YF-CACHE-UNDER-HOME",
       "nodeid": "tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home",
       "platform": "win32",
+      "scope": {"phases": ["1A-merge-recovery"], "ends_at_gate": "1A"},
       "nature": "deterministic on Windows",
       "signature": {
         "matcher": "statement_only",
@@ -32,6 +34,7 @@
       "id": "WIN-MEMLOG-CONCURRENT-PERMERROR13",
       "nodeid": "tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome",
       "platform": "win32",
+      "scope": {"phases": ["1A-merge-recovery"], "ends_at_gate": "1A"},
       "nature": "intermittent on Windows (file-locking race)",
       "signature": {
         "matcher": "exclusive_error_collection",
