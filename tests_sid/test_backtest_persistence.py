@@ -64,7 +64,7 @@ def check_guards(db):
             repo.set_status(vid, status)
     with pytest.raises(ValueError, match="unknown strategy status"):
         repo.set_status(vid, "LIVE")
-    with pytest.raises(ValueError, match="different params"):
+    with pytest.raises(ValueError, match="params_hash does not match"):     # a hash must be derived from its params
         repo.strategy_version(spec.identifier, {"symbols": ["QQQ"]}, spec.params_hash)
     with pytest.raises(IntegrityError):                       # a result needs its research run
         repo.record(run_id=new_run_id(), version_id=vid, segment="full", report=report.as_dict(),
@@ -86,24 +86,27 @@ def check_notes_are_sanitised(db):
     assert secret not in stored
 
 
-def _secret_params(secret):
-    """Synthetic credentials in the shapes a parameter could carry: by key, nested, in text, in a list."""
-    return {"symbols": ["SPY"], "api_key": secret,
-            "source": {"url": "postgresql://u:" + secret + "@h/db", "token": secret, "window": 20},
-            "notes": ["password='" + secret + "'", "plain note"]}
+def check_credential_params_are_rejected_and_nothing_is_persisted(db):
+    from sid_trading_firm.strategies import CredentialParameterError
 
-
-def check_strategy_params_are_sanitised(db):
     repo = BacktestRepository(db)
     secret = "synth" + "-param-pw-91"
-    vid = repo.strategy_version("custom_v1", _secret_params(secret), "a" * 16)
-    assert repo.strategy_version("custom_v1", _secret_params(secret), "a" * 16) == vid      # still idempotent
+    for params in ({"api_key": secret}, {"source": {"url": "postgresql://u:" + secret + "@h/db"}},
+                   {"notes": ["password='" + secret + "'"]}):
+        with pytest.raises(CredentialParameterError):
+            repo.strategy_version("custom_v1", params, "a" * 16)
     with db.engine.connect() as c:
-        stored = str(c.execute(text("SELECT params FROM strategy_versions")).all())
-    assert secret not in stored
-    params = repo.get_version(vid).params
-    assert params["symbols"] == ["SPY"] and params["source"]["window"] == 20 and params["notes"][1] == "plain note"
-    assert params["api_key"] != secret and params["source"]["token"] != secret
+        assert c.execute(text("SELECT count(*) FROM strategy_versions")).scalar() == 0
+
+
+def check_ordinary_params_are_idempotent(db):
+    repo = BacktestRepository(db)
+    spec = spec_for(create("buy_and_hold_v1", {"symbols": ["SPY", "QQQ"]}))
+    vid = repo.strategy_version(spec.identifier, spec.params, spec.params_hash)
+    assert repo.strategy_version(spec.identifier, spec.params, spec.params_hash) == vid
+    with db.engine.connect() as c:
+        stored_hash, = c.execute(text("SELECT params_hash FROM strategy_versions WHERE identifier = 'buy_and_hold_v1'")).one()
+    assert stored_hash == spec.params_hash
 
 
 def check_params_are_sanitised_without_the_repository(db):
@@ -120,7 +123,8 @@ def check_params_are_sanitised_without_the_repository(db):
     assert secret not in stored
 
 
-CHECKS = [check_round_trip, check_guards, check_notes_are_sanitised, check_strategy_params_are_sanitised,
+CHECKS = [check_round_trip, check_guards, check_notes_are_sanitised,
+          check_credential_params_are_rejected_and_nothing_is_persisted, check_ordinary_params_are_idempotent,
           check_params_are_sanitised_without_the_repository]
 
 

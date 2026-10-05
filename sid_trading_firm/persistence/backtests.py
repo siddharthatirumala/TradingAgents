@@ -3,9 +3,11 @@
 Strategy status changes are explicit calls, never a side effect of a backtest. Paper
 states are refused here: paper trading is Phase 4 and not authorised.
 
-Strategy parameters are stored with credentials masked (recursively, by key and by
-value pattern), so a credential passed as a parameter never reaches the database; the
-existing-version comparison uses the same masked form.
+Strategy parameters that carry a credential are refused before anything is written,
+and the stored ``params_hash`` must equal the hash recomputed here from those (clean)
+parameters, so neither a raw credential nor anything derived from one can become part
+of a stored strategy identity. The credential-masking flush hook still covers the
+column as a second line of defence.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from sid_trading_firm.persistence.models import (
     BacktestResultRow,
     StrategyVersion,
 )
-from sid_trading_firm.persistence.sanitize import sanitize
+from sid_trading_firm.strategies.registry import StrategySpec, reject_credentials
 
 UNAUTHORISED_STATUSES = frozenset({"PAPER_APPROVED", "PAPER_ACTIVE"})
 
@@ -34,8 +36,16 @@ class BacktestRepository:
 
     def strategy_version(self, identifier: str, params: Mapping[str, Any], params_hash: str, *,
                          description: str | None = None) -> uuid.UUID:
-        """The id of this exact strategy version, created as PROPOSED if new."""
-        clean = sanitize(_jsonable(params))
+        """The id of this exact strategy version, created as PROPOSED if new.
+
+        Refuses (before touching the database) parameters that carry a credential and a
+        ``params_hash`` that is not the hash of ``identifier`` and ``params``.
+        """
+        reject_credentials(params, where=f"{identifier} parameters")
+        expected = StrategySpec(identifier, params).params_hash
+        if params_hash != expected:
+            raise ValueError(f"{identifier}: params_hash does not match its parameters")
+        clean = _jsonable(params)
         with self.db.session() as s:
             existing = s.scalar(select(StrategyVersion).where(StrategyVersion.identifier == identifier,
                                                               StrategyVersion.params_hash == params_hash))
