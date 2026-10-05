@@ -5,8 +5,11 @@
 The specification names the universe file, the price data, the screening date, the
 filter thresholds, the factor weights and the candidate limits. Results are written
 to the ``--out`` directory (report.md, results.json; required, so the output location
-is always chosen explicitly) and, with ``--database``, stored as a research run of
-kind ``screen`` with its ranked candidates. No AI model is called.
+is always chosen explicitly). With ``--database`` the screen is stored first, as a
+research run of kind ``screen`` with its ranked candidates, and the files carry the
+database ``run_id``; if storing fails, the files are written marked as not stored and
+the command exits with the error. Every file is written whole or not at all. No AI
+model is called.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ from typing import Annotated
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from sid_trading_firm.backtest.run import DataSpec, load_panel
+from sid_trading_firm.backtest.run import DataSpec, StorageError, load_panel, write_atomically
 from sid_trading_firm.screening.filters import FilterConfig
 from sid_trading_firm.screening.scoring import ScoringConfig
 from sid_trading_firm.screening.screen import ScreenResult, run_screen
@@ -92,9 +95,20 @@ def run(spec: ScreenSpec, base: Path = Path("."), *, budgets=None) -> dict:
     return result_dict(spec, screen, panel.source)
 
 
+def _persistence_lines(result: dict) -> list[str]:
+    p = result.get("persistence") or {}
+    if p.get("status") == "stored":
+        return [f"Stored in the database as research run `{p['run_id']}`.", ""]
+    if p.get("status") == "failed":
+        failed_run = f" Research run `{p['run_id']}` is marked failed." if p.get("run_id") else ""
+        return [f"> **STORAGE FAILED. This screen was not stored in the database.**{failed_run} "
+                f"Error: {p.get('error')}", ""]
+    return ["Not stored in the database (run without `--database`).", ""]
+
+
 def render_report(result: dict) -> str:
     f = result["funnel"]
-    lines = [f"# Screen: {result['name']}", "",
+    lines = [f"# Screen: {result['name']}", "", *_persistence_lines(result),
              f"Screening date {result['as_of']}, universe `{result['universe']}` "
              f"(fingerprint `{result['universe_fingerprint']}`), data {result['data_source']} "
              f"(fingerprint `{result['data_fingerprint']}`), inputs fingerprint `{result['inputs_fingerprint']}`.", "",
@@ -141,9 +155,9 @@ def store(result: dict) -> str:
         runs.start(run, kind="screen", settings=settings)
         try:
             repo.record(run_id=run.run_id, result=result, data_source=result["data_source"])
-        except BaseException as exc:
+        except Exception as exc:
             runs.finish(run.run_id, status="failed", error=f"{type(exc).__name__}: {exc}")
-            raise
+            raise StorageError(f"{type(exc).__name__}: {exc}", run.run_id) from exc
         runs.finish(run.run_id, status="completed",
                     summary={"name": result["name"], "as_of": result["as_of"],
                              "selected": [c["symbol"] for c in result["selected"]]})
@@ -159,13 +173,24 @@ def main(argv: list[str] | None = None) -> int:
     spec_path = Path(args.spec)
     spec = load_spec(spec_path)
     result = run(spec, base=spec_path.parent)
-    out = args.out
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "results.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
-    (out / "report.md").write_text(render_report(result) + "\n", encoding="utf-8")
+    failure: Exception | None = None
+    result["persistence"] = {"status": "not_requested", "run_id": None}
     if args.database:
-        result["run_id"] = store(result)
-    print(f"report: {out / 'report.md'}")
+        try:
+            result["persistence"] = {"status": "stored", "run_id": store(result)}
+        except Exception as exc:    # write the files marked as not stored, then fail
+            from sid_trading_firm.persistence.sanitize import sanitize_text
+
+            failure = exc
+            result["persistence"] = {"status": "failed", "run_id": getattr(exc, "run_id", None),
+                                     "error": sanitize_text(f"{type(exc).__name__}: {exc}")}
+    args.out.mkdir(parents=True, exist_ok=True)
+    write_atomically(args.out / "results.json", json.dumps(result, indent=2, default=str))
+    write_atomically(args.out / "report.md", render_report(result) + "\n")
+    if failure is not None:
+        print(f"STORAGE FAILED; the files in {args.out} are marked as not stored", file=sys.stderr)
+        raise failure
+    print(f"report: {args.out / 'report.md'}")
     return 0
 
 

@@ -71,8 +71,15 @@ class BacktestRepository:
             row.status = status
 
     def record(self, *, run_id: str, version_id: uuid.UUID, segment: str, report: dict, config: dict,
-               data_source: str, notes: str | None = None) -> uuid.UUID:
-        """Store one evaluated segment (``report`` is ``PerformanceReport.as_dict()``)."""
+               data_source: str, notes: str | None = None, equity: dict | None = None) -> uuid.UUID:
+        """Store one evaluated segment (``report`` is ``PerformanceReport.as_dict()``).
+
+        ``equity`` is the segment's equity curve as ``{"dates": [...], "values": [...]}``.
+        """
+        if equity is not None:
+            dates, values = equity.get("dates"), equity.get("values")
+            if not isinstance(dates, list) or not isinstance(values, list) or len(dates) != len(values) or not dates:
+                raise ValueError("equity must hold equally long, non-empty 'dates' and 'values' lists")
         with self.db.session() as s:
             row = BacktestResultRow(
                 run_id=uuid.UUID(run_id), strategy_version_id=version_id, segment=segment,
@@ -80,7 +87,7 @@ class BacktestRepository:
                 period_end=datetime.fromisoformat(report["end"]).date(),
                 data_fingerprint=report["data_fingerprint"], data_source=data_source,
                 config=_jsonable(config), metrics=report["metrics"], regimes=report.get("regimes") or None,
-                notes=notes, created_at=datetime.now(UTC))
+                equity=equity, notes=notes, created_at=datetime.now(UTC))
             s.add(row)
             s.flush()
             return row.id

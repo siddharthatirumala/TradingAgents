@@ -4,15 +4,21 @@
 
 The specification names the data, the strategy, the costs and the evaluation. Every
 report carries the same disclosures, because a backtest says nothing without them.
-Results are written to the ``--out`` directory (report.md, results.json; required, so
-the output location is always chosen explicitly) and, with ``--database``, stored as a
-research run with one row per evaluated segment and walk-forward window.
+Results go to the ``--out`` directory (required, so the output location is always chosen
+explicitly): report.md, results.json and one equity-curve CSV per segment plus the
+stitched out-of-sample curve beside its benchmark. With ``--database`` the results are
+stored first, as a research run with one row per evaluated segment and walk-forward
+window (each with its equity curve), and the files carry the database ``run_id``. If
+storing fails, the files are still written but marked as not stored (``persistence``
+status ``failed`` and a banner at the top of the report), and the command exits with
+the error. Every file is written whole or not at all.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +30,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sid_trading_firm.backtest.data import PricePanel, load_csv_directory, load_upstream_yahoo
 from sid_trading_firm.backtest.engine import BacktestConfig, run_backtest
 from sid_trading_firm.backtest.metrics import evaluate
+from sid_trading_firm.backtest.oos import (
+    curve_dict,
+    relative_metrics,
+    stitched_benchmark,
+    window_equity,
+    window_slices,
+)
 from sid_trading_firm.backtest.splits import chronological_split, walk_forward, walk_forward_windows
 from sid_trading_firm.quant.costs import SlippageModel, TransactionCostModel
 from sid_trading_firm.strategies import create, spec_for
@@ -149,15 +162,16 @@ def run(spec: BacktestSpec, base: Path = Path(".")) -> dict:
                  "first": str(panel.calendar()[0].date()), "last": str(panel.calendar()[-1].date()),
                  "dropped_bars": dict(panel.dropped_bars)},
         "engine": spec.engine.model_dump(), "benchmark": spec.benchmark, "segments": {}, "walk_forward": None,
-        "disclosures": DISCLOSURES,
+        "equity": {}, "disclosures": DISCLOSURES,
     }
     if spec.evaluation.split:
         split = chronological_split(panel.calendar(), spec.evaluation.split.train, spec.evaluation.split.validation)
         for label, period in (("train", split.train), ("validation", split.validation), ("test", split.test)):
             visible = panel.truncated(period.end)
             cfg = engine_config(spec.engine, start=str(period.start.date()), end=str(period.end.date()))
-            report = evaluate(run_backtest(visible, strategy, cfg), visible, benchmark=spec.benchmark)
-            out["segments"][label] = report.as_dict()
+            backtest = run_backtest(visible, strategy, cfg)
+            out["segments"][label] = evaluate(backtest, visible, benchmark=spec.benchmark).as_dict()
+            out["equity"][label] = curve_dict(backtest.equity)
     if spec.evaluation.walk_forward:
         wf = spec.evaluation.walk_forward
         grid = spec.strategy.grid or [spec.strategy.params]
@@ -165,16 +179,29 @@ def run(spec: BacktestSpec, base: Path = Path(".")) -> dict:
         result = walk_forward(panel, lambda p: create(spec.strategy.id, p), grid, engine_config(spec.engine),
                               windows, benchmark=spec.benchmark)
         oos = result.oos_equity
+        tested = [o for o in result.outcomes if o.test_report is not None]
+        periods = [o.window.test for o in tested]
+        slices = dict(zip((id(o) for o in tested), window_slices(oos, periods), strict=True))
+        oos_metrics = dict(result.oos_metrics)
+        if spec.benchmark and len(oos):
+            bench = stitched_benchmark(panel, spec.benchmark, oos, periods)
+            oos_metrics.update(relative_metrics(oos, bench))
+            if bench is not None:
+                out["equity"]["walk_forward_benchmark"] = curve_dict(bench)
+        if len(oos):
+            out["equity"]["walk_forward_oos"] = curve_dict(oos)
         out["walk_forward"] = {
             "windows": [{"train": o.window.train.label(), "test": o.window.test.label(),
                          "chosen_params": o.chosen_params,
                          "chosen_params_hash": (spec_for(create(spec.strategy.id, o.chosen_params)).params_hash
                                                 if o.chosen_params is not None else None),
                          "note": o.note,
-                         "test_report": o.test_report.as_dict() if o.test_report else None}
+                         "test_report": o.test_report.as_dict() if o.test_report else None,
+                         "equity": (curve_dict(window_equity(slices[id(o)], spec.engine.initial_cash))
+                                    if id(o) in slices else None)}
                         for o in result.outcomes],
             "oos_metrics": {k: {"value": r.value, "status": r.status.value, "reason": r.reason}
-                            for k, r in result.oos_metrics.items()},
+                            for k, r in oos_metrics.items()},
             "oos_days": int(len(oos)),
             "oos_start": str(oos.index[0].date()) if len(oos) else None,
             "oos_end": str(oos.index[-1].date()) if len(oos) else None,
@@ -197,8 +224,23 @@ ROWS = [("total_return", True), ("annualised_return", True), ("benchmark_return"
         ("total_commission", False), ("total_slippage", False)]
 
 
+PERCENT_OOS = {"total_return", "volatility", "max_drawdown", "benchmark_return", "excess_return"}
+
+
+def _persistence_lines(result: dict) -> list[str]:
+    status = (result.get("persistence") or {}).get("status")
+    p = result.get("persistence") or {}
+    if status == "stored":
+        return [f"Stored in the database as research run `{p['run_id']}`.", ""]
+    if status == "failed":
+        failed_run = f" Research run `{p['run_id']}` is marked failed." if p.get("run_id") else ""
+        return [f"> **STORAGE FAILED. These results were not stored in the database.**{failed_run} "
+                f"Error: {p.get('error')}", ""]
+    return ["Not stored in the database (run without `--database`).", ""]
+
+
 def render_report(result: dict) -> str:
-    lines = [f"# Backtest: {result['name']}", "",
+    lines = [f"# Backtest: {result['name']}", "", *_persistence_lines(result),
              f"Strategy `{result['strategy']['id']}` (params hash `{result['strategy']['params_hash']}`), "
              f"data {result['data']['source']} {result['data']['first']}..{result['data']['last']}, "
              f"fingerprint `{result['data']['fingerprint']}`, benchmark {result['benchmark'] or 'none'}.", "",
@@ -229,8 +271,24 @@ def render_report(result: dict) -> str:
                    else (w["note"] or "n/a"))
             lines.append(f"| {w['train']} | {w['test']} | `{json.dumps(w['chosen_params'], sort_keys=True)}` | {ret} |")
         lines += ["", "Stitched out-of-sample: " + ", ".join(
-            f"{k} {_fmt(v, k != 'sharpe')}" for k, v in wf["oos_metrics"].items()), ""]
+            f"{k} {_fmt(v, k in PERCENT_OOS)}" for k, v in wf["oos_metrics"].items()), ""]
+        if "benchmark_return" in wf["oos_metrics"]:
+            lines += [f"The benchmark ({result['benchmark']}) is held over the same test windows and compounded "
+                      "the same way, so both cover exactly the same dates.", ""]
+    files = [f"equity_{n}.csv" for n in result["segments"]]
+    if result.get("equity", {}).get("walk_forward_oos"):
+        files.append("equity_walk_forward_oos.csv (strategy and benchmark)")
+    if files:
+        lines += ["## Equity curves", "", "Written beside this report: " + ", ".join(files) + ".", ""]
     return "\n".join(lines)
+
+
+class StorageError(RuntimeError):
+    """Storing the results failed; ``run_id`` names the research run marked failed, if one was started."""
+
+    def __init__(self, message: str, run_id: str | None = None) -> None:
+        super().__init__(message)
+        self.run_id = run_id
 
 
 def store(result: dict, spec: BacktestSpec) -> str:
@@ -250,7 +308,7 @@ def store(result: dict, spec: BacktestSpec) -> str:
             vid = repo.strategy_version(strategy_id, result["strategy"]["params"], result["strategy"]["params_hash"])
             for segment, report in result["segments"].items():
                 repo.record(run_id=run.run_id, version_id=vid, segment=segment, report=report,
-                            config=result["engine"], data_source=source)
+                            config=result["engine"], data_source=source, equity=result["equity"].get(segment))
             wf = result["walk_forward"]
             if wf:
                 for w in wf["windows"]:
@@ -260,21 +318,63 @@ def store(result: dict, spec: BacktestSpec) -> str:
                     wid = repo.strategy_version(chosen.identifier, chosen.params, chosen.params_hash)
                     repo.record(run_id=run.run_id, version_id=wid, segment="walk_forward_window",
                                 report=w["test_report"], config=result["engine"], data_source=source,
+                                equity=w["equity"],
                                 notes=f"train {w['train']}; parameters chosen on the training window only")
                 if wf["oos_start"]:
                     oos_report = {"start": wf["oos_start"], "end": wf["oos_end"],
                                   "data_fingerprint": result["data"]["fingerprint"], "metrics": wf["oos_metrics"]}
                     repo.record(run_id=run.run_id, version_id=vid, segment="walk_forward_oos", report=oos_report,
                                 config=result["engine"], data_source=source,
+                                equity=result["equity"].get("walk_forward_oos"),
                                 notes="stitched test windows; each window's parameters are in its "
                                       "walk_forward_window row")
-        except BaseException as exc:
+        except Exception as exc:
             runs.finish(run.run_id, status="failed", error=f"{type(exc).__name__}: {exc}")
-            raise
+            raise StorageError(f"{type(exc).__name__}: {exc}", run.run_id) from exc
         runs.finish(run.run_id, status="completed",
                     summary={"name": result["name"], "segments": list(result["segments"]),
                              "walk_forward_windows": len(wf["windows"]) if wf else 0})
         return run.run_id
+
+
+def write_atomically(path: Path, text: str) -> None:
+    """Write the whole file or nothing: a partial file is never left under the final name."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _curve_csv(curves: dict) -> str:
+    """CSV with a date column and one column per named curve; a curve without a date leaves its cell empty."""
+    names = [n for n, c in curves.items() if c]
+    by_date: dict = {}
+    for name in names:
+        for d, v in zip(curves[name]["dates"], curves[name]["values"], strict=True):
+            by_date.setdefault(d, {})[name] = v
+    rows = ["date," + ",".join(names)]
+    for d in sorted(by_date):
+        rows.append(d + "," + ",".join(repr(by_date[d][n]) if n in by_date[d] else "" for n in names))
+    return "\n".join(rows) + "\n"
+
+
+def write_artifacts(out: Path, result: dict) -> list[Path]:
+    """Equity CSVs, results.json and report.md (last), each written atomically."""
+    out.mkdir(parents=True, exist_ok=True)
+    written = []
+    for segment in result["segments"]:
+        path = out / f"equity_{segment}.csv"
+        write_atomically(path, _curve_csv({"equity": result["equity"].get(segment)}))
+        written.append(path)
+    if result["equity"].get("walk_forward_oos"):
+        path = out / "equity_walk_forward_oos.csv"
+        write_atomically(path, _curve_csv({"strategy": result["equity"]["walk_forward_oos"],
+                                            "benchmark": result["equity"].get("walk_forward_benchmark")}))
+        written.append(path)
+    for name, text in (("results.json", json.dumps(result, indent=2, default=str)),
+                       ("report.md", render_report(result) + "\n")):
+        write_atomically(out / name, text)
+        written.append(out / name)
+    return written
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -286,13 +386,22 @@ def main(argv: list[str] | None = None) -> int:
     spec_path = Path(args.spec)
     spec = load_spec(spec_path)
     result = run(spec, base=spec_path.parent)
-    out = args.out
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "results.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
-    (out / "report.md").write_text(render_report(result) + "\n", encoding="utf-8")
+    failure: Exception | None = None
+    result["persistence"] = {"status": "not_requested", "run_id": None}
     if args.database:
-        result["run_id"] = store(result, spec)
-    print(f"report: {out / 'report.md'}")
+        try:
+            result["persistence"] = {"status": "stored", "run_id": store(result, spec)}
+        except Exception as exc:    # write the files marked as not stored, then fail
+            from sid_trading_firm.persistence.sanitize import sanitize_text
+
+            failure = exc
+            result["persistence"] = {"status": "failed", "run_id": getattr(exc, "run_id", None),
+                                     "error": sanitize_text(f"{type(exc).__name__}: {exc}")}
+    write_artifacts(args.out, result)
+    if failure is not None:
+        print(f"STORAGE FAILED; the files in {args.out} are marked as not stored", file=sys.stderr)
+        raise failure
+    print(f"report: {args.out / 'report.md'}")
     return 0
 
 
