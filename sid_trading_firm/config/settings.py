@@ -171,6 +171,8 @@ class BudgetSettings(Strict):
     max_agent_iterations: Annotated[int, Field(gt=0)]
     max_debate_rounds: Annotated[int, Field(ge=1)]
     max_risk_discuss_rounds: Annotated[int, Field(ge=1)]
+    # Most candidates one screening run may hand to AI research.
+    max_ai_candidates_per_run: Annotated[int, Field(ge=1, le=50)] = 5
     # Output tokens assumed for a call's pre-call cost estimate when its model
     # sets no max_output_tokens.
     output_token_reserve: Annotated[int, Field(gt=0)] = 4096
