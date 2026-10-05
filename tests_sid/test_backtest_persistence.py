@@ -86,7 +86,42 @@ def check_notes_are_sanitised(db):
     assert secret not in stored
 
 
-CHECKS = [check_round_trip, check_guards, check_notes_are_sanitised]
+def _secret_params(secret):
+    """Synthetic credentials in the shapes a parameter could carry: by key, nested, in text, in a list."""
+    return {"symbols": ["SPY"], "api_key": secret,
+            "source": {"url": "postgresql://u:" + secret + "@h/db", "token": secret, "window": 20},
+            "notes": ["password='" + secret + "'", "plain note"]}
+
+
+def check_strategy_params_are_sanitised(db):
+    repo = BacktestRepository(db)
+    secret = "synth" + "-param-pw-91"
+    vid = repo.strategy_version("custom_v1", _secret_params(secret), "a" * 16)
+    assert repo.strategy_version("custom_v1", _secret_params(secret), "a" * 16) == vid      # still idempotent
+    with db.engine.connect() as c:
+        stored = str(c.execute(text("SELECT params FROM strategy_versions")).all())
+    assert secret not in stored
+    params = repo.get_version(vid).params
+    assert params["symbols"] == ["SPY"] and params["source"]["window"] == 20 and params["notes"][1] == "plain note"
+    assert params["api_key"] != secret and params["source"]["token"] != secret
+
+
+def check_params_are_sanitised_without_the_repository(db):
+    from datetime import UTC, datetime
+
+    from sid_trading_firm.persistence.models import StrategyVersion
+
+    secret = "synth" + "-direct-pw-17"
+    with db.session() as s:
+        s.add(StrategyVersion(identifier="direct_v1", params={"nested": [{"secret": secret}]}, params_hash="b" * 16,
+                              status="PROPOSED", created_at=datetime.now(UTC)))
+    with db.engine.connect() as c:
+        stored = str(c.execute(text("SELECT params FROM strategy_versions WHERE identifier = 'direct_v1'")).all())
+    assert secret not in stored
+
+
+CHECKS = [check_round_trip, check_guards, check_notes_are_sanitised, check_strategy_params_are_sanitised,
+          check_params_are_sanitised_without_the_repository]
 
 
 @pytest.fixture

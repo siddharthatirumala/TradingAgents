@@ -2,6 +2,10 @@
 
 Strategy status changes are explicit calls, never a side effect of a backtest. Paper
 states are refused here: paper trading is Phase 4 and not authorised.
+
+Strategy parameters are stored with credentials masked (recursively, by key and by
+value pattern), so a credential passed as a parameter never reaches the database; the
+existing-version comparison uses the same masked form.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from sid_trading_firm.persistence.models import (
     BacktestResultRow,
     StrategyVersion,
 )
+from sid_trading_firm.persistence.sanitize import sanitize
 
 UNAUTHORISED_STATUSES = frozenset({"PAPER_APPROVED", "PAPER_ACTIVE"})
 
@@ -30,14 +35,15 @@ class BacktestRepository:
     def strategy_version(self, identifier: str, params: Mapping[str, Any], params_hash: str, *,
                          description: str | None = None) -> uuid.UUID:
         """The id of this exact strategy version, created as PROPOSED if new."""
+        clean = sanitize(_jsonable(params))
         with self.db.session() as s:
             existing = s.scalar(select(StrategyVersion).where(StrategyVersion.identifier == identifier,
                                                               StrategyVersion.params_hash == params_hash))
             if existing is not None:
-                if existing.params != _jsonable(params):
+                if existing.params != clean:
                     raise ValueError(f"{identifier}: parameter hash {params_hash} already stores different params")
                 return existing.id
-            row = StrategyVersion(identifier=identifier, params=_jsonable(params), params_hash=params_hash,
+            row = StrategyVersion(identifier=identifier, params=clean, params_hash=params_hash,
                                   status="PROPOSED", description=description, created_at=datetime.now(UTC))
             s.add(row)
             s.flush()
