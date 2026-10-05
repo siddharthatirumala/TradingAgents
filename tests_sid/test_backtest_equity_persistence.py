@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from sid_trading_firm.backtest.oos import curve_dict
 from sid_trading_firm.persistence import Database, RunRepository, make_engine
-from sid_trading_firm.persistence.backtests import BacktestRepository
+from sid_trading_firm.persistence.backtests import BacktestRepository, equity_from_storage
 from sid_trading_firm.persistence.migrate import upgrade
 from sid_trading_firm.persistence.models import Base
 from sid_trading_firm.runtime import run_context
@@ -42,10 +42,11 @@ def check_equity_round_trips_exactly(db):
 
     (row,) = repo.results_for_run(run.run_id)
     assert row.id == rid
-    assert row.equity["dates"] == curve["dates"]                       # every date, in order, as stored
-    assert row.equity["values"] == curve["values"]                     # bit-exact floats
-    assert [v.hex() for v in row.equity["values"]] == [v.hex() for v in curve["values"]]
-    assert len(row.equity["dates"]) == len(pd.bdate_range("2021-01-04", "2025-12-31"))
+    stored = repo.equity_curve(rid)
+    assert stored["dates"] == curve["dates"]                           # every date, in order
+    assert all(type(v) is float for v in stored["values"])
+    assert [v.hex() for v in stored["values"]] == [v.hex() for v in curve["values"]]   # bit-exact
+    assert len(stored["dates"]) == len(pd.bdate_range("2021-01-04", "2025-12-31"))
 
     # Read back with raw SQL too, not just through the ORM (on PostgreSQL over a fresh connection;
     # an in-memory SQLite database lives only as long as its single pooled connection).
@@ -57,7 +58,11 @@ def check_equity_round_trips_exactly(db):
         import json
 
         raw = json.loads(raw)
-    assert raw["dates"] == curve["dates"] and raw["values"] == curve["values"]
+    # The raw JSON keeps each value's exact decimal; on PostgreSQL a very large magnitude may
+    # decode as int, which equity_from_storage turns back into the identical float.
+    restored = equity_from_storage(raw)
+    assert raw["dates"] == curve["dates"]
+    assert [v.hex() for v in restored["values"]] == [v.hex() for v in curve["values"]]
 
 
 @pytest.fixture
@@ -87,3 +92,34 @@ def test_sqlite(sqlite_db):
 @pytest.mark.skipif(not PG_URL, reason="SID_TEST_DATABASE_URL is not set")
 def test_postgres(postgres_db):
     check_equity_round_trips_exactly(postgres_db)
+
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad, message", [
+    ({"dates": ["2026-01-02"], "values": [float("nan")]}, "finite real numbers"),
+    ({"dates": ["2026-01-02"], "values": [float("inf")]}, "finite real numbers"),
+    ({"dates": ["2026-01-02"], "values": [True]}, "finite real numbers"),
+    ({"dates": ["2026-01-02"], "values": ["100.0"]}, "finite real numbers"),
+    ({"dates": ["02/01/2026"], "values": [1.0]}, "Invalid isoformat"),
+    ({"dates": [20260102], "values": [1.0]}, "ISO date strings"),
+])
+def test_malformed_equity_is_refused_before_storage(sqlite_db, bad, message):
+    with run_context() as run:
+        RunRepository(sqlite_db).start(run, kind="backtest", settings=settings())
+    repo = BacktestRepository(sqlite_db)
+    spec = spec_for(create("buy_and_hold_v1", {"symbols": ["SPY"]}))
+    vid = repo.strategy_version(spec.identifier, spec.params, spec.params_hash)
+    with pytest.raises(ValueError, match=message):
+        repo.record(run_id=run.run_id, version_id=vid, segment="full",
+                    report={"start": "2026-01-02", "end": "2026-01-02", "data_fingerprint": "x", "metrics": {}},
+                    config={}, data_source="x", equity=bad)
+    assert repo.results_for_run(run.run_id) == []
+
+
+@pytest.mark.unit
+def test_postgres_style_integer_rendering_is_restored_to_the_exact_float():
+    big = 1.7976931348623157e308
+    as_postgres_returns_it = int("17976931348623157" + "0" * 292)     # JSONB numeric without exponent
+    restored = equity_from_storage({"dates": ["2026-01-02", "2026-01-05"], "values": [as_postgres_returns_it, 100000]})
+    assert restored["values"][0].hex() == big.hex() and type(restored["values"][1]) is float
