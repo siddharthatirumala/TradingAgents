@@ -9,10 +9,19 @@ Rules enforced here:
   reported separately and are never evidence of an edge on their own.
 - Each test window starts from cash (no positions carried between windows), so one
   window's outcome cannot leak into the next; the stitched curve compounds them.
+- Windows are validated where they enter the evaluation, whoever built them: each
+  trains strictly before it tests, windows are in chronological order, test periods
+  never overlap, and every period holds trading dates of the panel.
+- If no parameter set has a finite objective on a window's training data, the whole
+  walk-forward is refused (:class:`WalkForwardError`). Skipping that window would
+  leave a gap in the out-of-sample record that hides exactly the periods where the
+  selection failed, so no partial result is returned.
 """
 
 from __future__ import annotations
 
+import math
+import numbers
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
@@ -86,6 +95,33 @@ def walk_forward_windows(calendar: pd.DatetimeIndex, train_days: int, test_days:
     return windows
 
 
+class WalkForwardError(BacktestError):
+    """A walk-forward evaluation that cannot produce a complete out-of-sample record."""
+
+
+def validate_windows(windows: Sequence[Window], calendar: pd.DatetimeIndex) -> None:
+    """Refuse windows that could leak test data into selection or double-count a period."""
+    if not windows:
+        raise WalkForwardError("no walk-forward windows")
+    dates = set(calendar)
+    previous: Window | None = None
+    for i, w in enumerate(windows, start=1):
+        label = f"window {i} (train {w.train.label()}, test {w.test.label()})"
+        if not (w.train.start <= w.train.end < w.test.start <= w.test.end):
+            raise WalkForwardError(f"{label}: periods must be ordered with training ending before testing starts")
+        for name, period in (("train", w.train), ("test", w.test)):
+            if period.start not in dates or period.end not in dates:
+                raise WalkForwardError(f"{label}: {name} period does not start and end on trading dates of the panel")
+            if len(calendar[(calendar >= period.start) & (calendar <= period.end)]) < 2:
+                raise WalkForwardError(f"{label}: {name} period holds fewer than two trading dates")
+        if previous is not None:
+            if w.train.start < previous.train.start or w.test.start < previous.test.start:
+                raise WalkForwardError(f"{label}: windows are not in chronological order")
+            if w.test.start <= previous.test.end:
+                raise WalkForwardError(f"{label}: test period overlaps the previous window's test period")
+        previous = w
+
+
 Objective = Callable[[PerformanceReport], float | None]
 
 
@@ -115,6 +151,7 @@ def walk_forward(panel: PricePanel, make_strategy: Callable[[Mapping], Strategy]
     """Choose parameters on each training window, run them on its test window, stitch the tests."""
     if not param_grid:
         raise BacktestError("empty parameter grid")
+    validate_windows(windows, panel.calendar())
     outcomes: list[WindowOutcome] = []
     pieces: list[pd.Series] = []
     for window in windows:
@@ -124,10 +161,12 @@ def walk_forward(panel: PricePanel, make_strategy: Callable[[Mapping], Strategy]
             train_cfg = replace(config, start=str(window.train.start.date()), end=str(window.train.end.date()))
             report = evaluate(run_backtest(visible, make_strategy(params), train_cfg), visible, benchmark=benchmark)
             scores.append((dict(params), objective(report)))
-        valid = [(p, s) for p, s in scores if s is not None]
+        valid = [(p, float(s)) for p, s in scores if _finite_number(s)]
         if not valid:
-            outcomes.append(WindowOutcome(window, None, scores, None, "no parameter set had a defined objective"))
-            continue
+            raise WalkForwardError(
+                f"window train {window.train.label()} / test {window.test.label()}: no parameter set had a finite "
+                f"objective on the training data (scores {[s for _, s in scores]}); refusing a walk-forward "
+                "with a gap in its out-of-sample record")
         best_score = max(s for _, s in valid)
         chosen = next(p for p, s in valid if s == best_score)    # ties: first in grid order
         test_panel = panel.truncated(window.test.end)
@@ -148,6 +187,12 @@ def walk_forward(panel: PricePanel, make_strategy: Callable[[Mapping], Strategy]
     else:
         metrics["total_return"] = Result.insufficient("no test window produced results")
     return WalkForwardResult(outcomes, oos, metrics)
+
+
+def _finite_number(value) -> bool:
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return False
+    return math.isfinite(value)
 
 
 def _stitch(pieces: list[pd.Series], start_value: float) -> pd.Series:
