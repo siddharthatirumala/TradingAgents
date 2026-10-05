@@ -1,0 +1,27 @@
+# Example backtest specification (Phase 2). Run with:
+#   python -m sid_trading_firm.backtest.run docs/sid_trading_firm/examples/backtest_momentum.yaml --out backtests/example
+# Data comes from Yahoo through upstream's free loader (network, cached; about five years
+# up to as_of). No AI model is called and nothing is traded. Every number below is an
+# assumption to be reviewed, not a recommendation.
+name: momentum_example
+data:
+  source: yahoo
+  as_of: "2026-09-30"
+  symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, XOM, UNH, SPY]
+benchmark: SPY
+strategy:
+  id: momentum_v1
+  params: {lookback: 252, skip: 21, top_n: 3, universe: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, XOM, UNH]}
+  grid:                                   # walk-forward candidates, chosen on training windows only
+    - {lookback: 126, skip: 21, top_n: 3, universe: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, XOM, UNH]}
+    - {lookback: 252, skip: 21, top_n: 3, universe: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, XOM, UNH]}
+engine:
+  initial_cash: 100000
+  max_weight: 0.34
+  rebalance: monthly
+  cash_buffer: 0.0
+  costs: {per_share: 0.005, minimum_per_order: 1.0}
+  slippage: {half_spread_bps: 2, impact_bps: 3}
+evaluation:
+  split: {train: 0.6, validation: 0.2}
+  walk_forward: {train_days: 504, test_days: 126}
