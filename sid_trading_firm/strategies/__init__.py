@@ -7,10 +7,11 @@ compute target weights from a point-in-time view only. No LLM code may be import
 
 from sid_trading_firm.strategies.registry import (
     REGISTRY,
+    CredentialParameterError,
     StrategySpec,
     StrategyStatus,
     create,
     spec_for,
 )
 
-__all__ = ["REGISTRY", "StrategySpec", "StrategyStatus", "create", "spec_for"]
+__all__ = ["REGISTRY", "CredentialParameterError", "StrategySpec", "StrategyStatus", "create", "spec_for"]

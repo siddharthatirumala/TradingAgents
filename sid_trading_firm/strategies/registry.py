@@ -1,4 +1,13 @@
-"""Strategy identities, parameter hashing and the governance lifecycle (GOVERNANCE.md section 15)."""
+"""Strategy identities, parameter hashing and the governance lifecycle (GOVERNANCE.md section 15).
+
+Strategy parameters are part of a strategy's identity: they are hashed into
+``params_hash`` and stored. A credential must never reach either, and masking it after
+hashing would not help (the raw value would already have shaped the hash). So
+parameters that carry a credential (a credential-named key, or a value or key the
+credential masker would change) are refused with :class:`CredentialParameterError`
+before any hash is computed or any strategy is built. The error names the offending
+paths, never the values.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +18,7 @@ from dataclasses import dataclass, fields
 from enum import StrEnum
 from typing import Any
 
+from sid_trading_firm.persistence.sanitize import credential_paths
 from sid_trading_firm.strategies.reference import BuyAndHoldV1, MomentumV1
 
 REGISTRY: dict[str, type] = {
@@ -17,6 +27,18 @@ REGISTRY: dict[str, type] = {
 }
 
 _IDENTITY_FIELDS = {"name", "version"}
+
+
+class CredentialParameterError(ValueError):
+    """Strategy parameters that carry a credential; refused before hashing or persistence."""
+
+
+def reject_credentials(params: Mapping[str, Any], *, where: str = "strategy parameters") -> None:
+    """Raise :class:`CredentialParameterError` if ``params`` carry a credential anywhere."""
+    paths = credential_paths(_jsonable(params))
+    if paths:
+        raise CredentialParameterError(
+            f"{where} must not carry credentials; refused at {', '.join(paths)}")
 
 
 class StrategyStatus(StrEnum):
@@ -34,6 +56,9 @@ class StrategyStatus(StrEnum):
 class StrategySpec:
     identifier: str
     params: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        reject_credentials(self.params, where=f"{self.identifier} parameters")
 
     @property
     def params_hash(self) -> str:
@@ -56,6 +81,7 @@ def create(identifier: str, params: Mapping[str, Any] | None = None):
     except KeyError:
         raise KeyError(f"unknown strategy {identifier!r}; known: {sorted(REGISTRY)}") from None
     params = dict(params or {})
+    reject_credentials(params, where=f"{identifier} parameters")
     allowed = {f.name for f in fields(cls)} - _IDENTITY_FIELDS
     unknown = set(params) - allowed
     if unknown:
