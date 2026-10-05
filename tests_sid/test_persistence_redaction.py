@@ -35,7 +35,7 @@ def postgres_db():
     engine = make_engine(PG_URL)
     yield Database(engine)
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE audit_events, llm_usage, research_runs"))
+        connection.execute(text("TRUNCATE audit_events, llm_usage, research_runs CASCADE"))
     engine.dispose()
 
 

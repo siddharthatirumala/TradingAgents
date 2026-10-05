@@ -30,6 +30,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -137,3 +138,50 @@ class AuditEvent(Base):
     actor: Mapped[str] = mapped_column(String(64))
     message: Mapped[str] = mapped_column(Text)
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+
+
+STRATEGY_STATUSES = ("PROPOSED", "BACKTESTED", "VALIDATED", "PAPER_APPROVED", "PAPER_ACTIVE", "RETIRED")
+BACKTEST_SEGMENTS = ("full", "train", "validation", "test", "walk_forward_window", "walk_forward_oos")
+
+
+class StrategyVersion(Base):
+    """One strategy identity with one exact parameter set (GOVERNANCE.md section 15)."""
+
+    __tablename__ = "strategy_versions"
+    __table_args__ = (
+        CheckConstraint(f"status IN {STRATEGY_STATUSES}", name="status"),
+        UniqueConstraint("identifier", "params_hash"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    identifier: Mapped[str] = mapped_column(String(64))
+    params: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    params_hash: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(20))
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class BacktestResultRow(Base):
+    """One evaluated segment of a backtest run (full, train, validation, test, walk-forward)."""
+
+    __tablename__ = "backtest_results"
+    __table_args__ = (
+        CheckConstraint(f"segment IN {BACKTEST_SEGMENTS}", name="segment"),
+        Index(None, "run_id"),
+        Index(None, "strategy_version_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("research_runs.run_id", ondelete="RESTRICT"))
+    strategy_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("strategy_versions.id", ondelete="RESTRICT"))
+    segment: Mapped[str] = mapped_column(String(24))
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    data_fingerprint: Mapped[str] = mapped_column(String(32))
+    data_source: Mapped[str] = mapped_column(String(128))
+    config: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    regimes: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
