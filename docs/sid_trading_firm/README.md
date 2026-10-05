@@ -55,6 +55,19 @@ bias, cost assumptions, in-sample versus out-of-sample). Add `--database` to sto
 the results (needs `SID_DATABASE__URL`). Signals use data up to each decision date
 and orders fill at the next open; this is simulation only and never places an order.
 
+## Deterministic screening
+
+`sid_trading_firm/screening` reduces a versioned universe file to a short, explainable
+list of candidates for later research: explicit filters (price, liquidity, volatility,
+history, data freshness), then percentile-ranked factor scores, then a cap. The cap is
+the smallest of the requested count, `budgets.max_ai_candidates_per_run` and what the
+daily AI budget can pay for at the stated research cost per candidate. No AI model is
+called, and a candidate is not a recommendation or a trade signal.
+
+```bash
+python -m sid_trading_firm.screening.run docs/sid_trading_firm/examples/screen_large_cap.yaml --out <dir>
+```
+
 ## Status
 
 Phase 1A (foundation) and Phase 2 (deterministic backtesting) are merged; Phase 3
