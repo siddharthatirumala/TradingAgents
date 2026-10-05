@@ -1,0 +1,47 @@
+# Seed universe for development and tests of the screening pipeline (Phase 3).
+# Not an index membership and not a recommendation. Edit by adding a new version file;
+# never change a version that results were recorded against (its fingerprint would change).
+name: us_large_cap_seed
+version: v1
+source: >-
+  Hand-compiled list of large, liquid US-listed companies and two broad ETFs, chosen for
+  pipeline development. Not derived from any index provider.
+as_of: 2026-10-05
+survivorship_note: >-
+  Survivorship bias: this list was compiled on its as_of date from companies that exist
+  and are large today. Screening it over earlier dates excludes companies that were
+  delisted, acquired or shrank, which overstates historical results.
+members:
+  - {symbol: AAPL, asset_type: common_stock, sector: Information Technology}
+  - {symbol: MSFT, asset_type: common_stock, sector: Information Technology}
+  - {symbol: NVDA, asset_type: common_stock, sector: Information Technology}
+  - {symbol: AVGO, asset_type: common_stock, sector: Information Technology}
+  - {symbol: ORCL, asset_type: common_stock, sector: Information Technology}
+  - {symbol: ADBE, asset_type: common_stock, sector: Information Technology}
+  - {symbol: CSCO, asset_type: common_stock, sector: Information Technology}
+  - {symbol: GOOGL, asset_type: common_stock, sector: Communication Services}
+  - {symbol: META, asset_type: common_stock, sector: Communication Services}
+  - {symbol: NFLX, asset_type: common_stock, sector: Communication Services}
+  - {symbol: AMZN, asset_type: common_stock, sector: Consumer Discretionary}
+  - {symbol: TSLA, asset_type: common_stock, sector: Consumer Discretionary}
+  - {symbol: HD, asset_type: common_stock, sector: Consumer Discretionary}
+  - {symbol: MCD, asset_type: common_stock, sector: Consumer Discretionary}
+  - {symbol: COST, asset_type: common_stock, sector: Consumer Staples}
+  - {symbol: WMT, asset_type: common_stock, sector: Consumer Staples}
+  - {symbol: PG, asset_type: common_stock, sector: Consumer Staples}
+  - {symbol: KO, asset_type: common_stock, sector: Consumer Staples}
+  - {symbol: JPM, asset_type: common_stock, sector: Financials}
+  - {symbol: BRK-B, asset_type: common_stock, sector: Financials}
+  - {symbol: V, asset_type: common_stock, sector: Financials}
+  - {symbol: MA, asset_type: common_stock, sector: Financials}
+  - {symbol: BAC, asset_type: common_stock, sector: Financials}
+  - {symbol: UNH, asset_type: common_stock, sector: Health Care}
+  - {symbol: LLY, asset_type: common_stock, sector: Health Care}
+  - {symbol: JNJ, asset_type: common_stock, sector: Health Care}
+  - {symbol: MRK, asset_type: common_stock, sector: Health Care}
+  - {symbol: XOM, asset_type: common_stock, sector: Energy}
+  - {symbol: CVX, asset_type: common_stock, sector: Energy}
+  - {symbol: CAT, asset_type: common_stock, sector: Industrials}
+  - {symbol: GE, asset_type: common_stock, sector: Industrials}
+  - {symbol: SPY, asset_type: etf}
+  - {symbol: QQQ, asset_type: etf}
