@@ -9,7 +9,7 @@ import pytest
 from sid_trading_firm import strategies
 from sid_trading_firm.backtest.data import PricePanel
 from sid_trading_firm.backtest.engine import BacktestConfig, run_backtest
-from sid_trading_firm.strategies import StrategyStatus, create, spec_for
+from sid_trading_firm.strategies import StrategySpec, StrategyStatus, create, spec_for
 from sid_trading_firm.strategies.reference import BuyAndHoldV1, MomentumV1
 
 pytestmark = pytest.mark.unit
@@ -82,6 +82,8 @@ def test_registry_creates_validates_and_hashes():
     assert spec.params_hash == spec_for(create("momentum_v1", {"lookback": 60, "skip": 5, "top_n": 3,
                                                                "universe": ["A", "B"]})).params_hash
     assert spec.params_hash != spec_for(create("momentum_v1", {"lookback": 61, "skip": 5})).params_hash
+    assert (StrategySpec("x_v1", {"u": ["A", "B"]}).params_hash
+            == StrategySpec("x_v1", {"u": ("A", "B")}).params_hash)     # list or tuple: same identity
     with pytest.raises(KeyError, match="unknown strategy"):
         create("magic_v9")
     with pytest.raises(ValueError, match="unknown parameters"):
