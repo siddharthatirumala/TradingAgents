@@ -1,0 +1,21 @@
+[main] origin/main == 2a36d94
+[identity] head=f15fccd base=main (retargeted: no); unique: f15fccd
+[diff] 4 files changed, 219 insertions(+) since merge base 2a36d94
+           A	docs/sid_trading_firm/universes/us_large_cap_seed_v1.yaml
+           A	sid_trading_firm/screening/__init__.py
+           A	sid_trading_firm/screening/universe.py
+           A	tests_sid/test_screening_universe.py
+[merge] conflict-free; merged tree == main + PR patch (dc542f7ac6b2)
+[upstream] 1 failed, 1258 passed, 4 skipped, 1 deselected, 20 warnings, 99 subtests passed in 38.98s
+           ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+           tests collected=1263 passed=1357 failed=1
+           RESULT: PASS
+[sid] 434 passed, 19 deselected, 3 warnings in 18.18s
+[migrations] upgrade ['alembic_version', 'audit_events', 'backtest_results', 'llm_usage', 'research_runs', 'strategy_versions'] downgrade ['alembic_version'] re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37248270596 on f15fccd: attempt 1: success=6
+[ci-pr] 'SID Trading Firm CI' run 37248270533 on f15fccd: attempt 1: success=4
+[merged] 5639156 = merge(2a36d94, f15fccd); tree == validated tree
+[ci-main] 'CI' run 37248379077 on 5639156: success
+[ci-main] 'SID Trading Firm CI' run 37248379024 on 5639156: success
+MERGED PR #20 -> main 563915636c5e662164a40ea10eca5dd3f67c7831
