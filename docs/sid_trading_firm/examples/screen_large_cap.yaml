@@ -1,0 +1,28 @@
+# Example screening specification (Phase 3). Run with:
+#   python -m sid_trading_firm.screening.run docs/sid_trading_firm/examples/screen_large_cap.yaml --out <dir>
+# Data comes from Yahoo through upstream's free loader (network, cached). No AI model is
+# called. Every threshold and weight below is an explicit assumption to be reviewed; the
+# candidates are symbols for later research, not recommendations.
+name: large_cap_example
+universe: ../universes/us_large_cap_seed_v1.yaml
+data:
+  source: yahoo
+  as_of: "2026-09-30"
+  symbols: [AAPL, MSFT, NVDA, AVGO, ORCL, ADBE, CSCO, GOOGL, META, NFLX, AMZN, TSLA, HD, MCD, COST, WMT,
+            PG, KO, JPM, BRK-B, V, MA, BAC, UNH, LLY, JNJ, MRK, XOM, CVX, CAT, GE, SPY, QQQ]
+as_of: "2026-09-30"
+filters:
+  min_price: 5
+  min_avg_dollar_volume: 50000000
+  max_annualised_volatility: 0.80
+  min_history_days: 260
+  max_data_age_days: 5
+scoring:
+  factors:
+    momentum: {weight: 2}
+    trend: {weight: 1}
+    low_volatility: {weight: 1}
+max_candidates: 5
+# Research cost per candidate, from the Phase 1A all-Sonnet baselines ($0.72-$0.80 per
+# analysis); an engineering measurement, not a production estimate.
+research_cost_per_candidate_usd: "0.80"
