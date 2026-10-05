@@ -104,6 +104,7 @@ SANITIZED_COLUMNS = {
     "LLMUsage": ("error_message", "error_type"),
     "StrategyVersion": ("description",),
     "BacktestResultRow": ("notes", "config", "data_source"),
+    "ScreeningResultRow": ("config", "data_source", "rejections"),
 }
 
 

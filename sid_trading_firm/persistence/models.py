@@ -185,3 +185,45 @@ class BacktestResultRow(Base):
     regimes: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class ScreeningResultRow(Base):
+    """One deterministic screen: its inputs (by fingerprint), funnel, rejections and cost limit."""
+
+    __tablename__ = "screening_results"
+    __table_args__ = (Index(None, "run_id"), Index(None, "as_of"))
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("research_runs.run_id", ondelete="RESTRICT"))
+    as_of: Mapped[date] = mapped_column(Date)
+    universe: Mapped[str] = mapped_column(String(128))
+    universe_fingerprint: Mapped[str] = mapped_column(String(32))
+    data_fingerprint: Mapped[str] = mapped_column(String(32))
+    config_fingerprint: Mapped[str] = mapped_column(String(32))
+    inputs_fingerprint: Mapped[str] = mapped_column(String(32))
+    data_source: Mapped[str] = mapped_column(String(128))
+    config: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    funnel: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    rejections: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    cost: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class ScreeningCandidate(Base):
+    """A symbol a screen selected for later research, in rank order. Not a trade signal."""
+
+    __tablename__ = "screening_candidates"
+    __table_args__ = (
+        CheckConstraint("rank >= 1", name="rank"),
+        UniqueConstraint("screening_result_id", "rank"),
+        UniqueConstraint("screening_result_id", "symbol"),
+        Index(None, "symbol"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    screening_result_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("screening_results.id", ondelete="CASCADE"))
+    rank: Mapped[int] = mapped_column(Integer)
+    symbol: Mapped[str] = mapped_column(String(16))
+    composite: Mapped[float] = mapped_column(Float)
+    factor_ranks: Mapped[dict[str, Any]] = mapped_column(JSONType)
+    factor_values: Mapped[dict[str, Any]] = mapped_column(JSONType)
