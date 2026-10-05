@@ -256,7 +256,8 @@ def store(result: dict, spec: BacktestSpec) -> str:
                 for w in wf["windows"]:
                     if w["test_report"] is None:
                         continue
-                    wid = repo.strategy_version(strategy_id, w["chosen_params"], w["chosen_params_hash"])
+                    chosen = spec_for(create(strategy_id, w["chosen_params"]))     # full parameters, defaults included
+                    wid = repo.strategy_version(chosen.identifier, chosen.params, chosen.params_hash)
                     repo.record(run_id=run.run_id, version_id=wid, segment="walk_forward_window",
                                 report=w["test_report"], config=result["engine"], data_source=source,
                                 notes=f"train {w['train']}; parameters chosen on the training window only")

@@ -97,12 +97,41 @@ def sanitize(value: Any, _depth: int = 0) -> Any:
     return value
 
 
+def credential_paths(value: Any, _path: str = "$", _depth: int = 0) -> list[str]:
+    """Where ``value`` carries a credential, as paths only (never the values).
+
+    A part is credential-bearing when :func:`sanitize` would change it: a
+    credential-named key with a non-null value, a key or string the text masker
+    would alter (key=value pairs, Authorization values, URL user-info, provider
+    keys, bearer tokens), or nesting deeper than the masker inspects. Used to refuse
+    such input outright where masking is not enough, such as a strategy's identity.
+    """
+    if _depth > MAX_DEPTH:
+        return [f"{_path} (nested too deeply to inspect)"]
+    if isinstance(value, str):
+        return [_path] if sanitize_text(value) != value else []
+    if isinstance(value, Mapping):
+        found: list[str] = []
+        for key, item in value.items():
+            key_text = str(key)
+            shaped = sanitize_text(key_text) != key_text
+            path = f"{_path}.<credential-shaped key>" if shaped else f"{_path}.{key_text}"
+            if shaped or (is_sensitive_key(key) and item is not None):
+                found.append(path)
+            else:
+                found += credential_paths(item, path, _depth + 1)
+        return found
+    if isinstance(value, (list, tuple)):
+        return [p for i, item in enumerate(value) for p in credential_paths(item, f"{_path}[{i}]", _depth + 1)]
+    return []
+
+
 # Columns that hold free text or structured diagnostics, per mapped class name.
 SANITIZED_COLUMNS = {
     "ResearchRun": ("error", "summary", "config_snapshot"),
     "AuditEvent": ("message", "payload", "actor"),
     "LLMUsage": ("error_message", "error_type"),
-    "StrategyVersion": ("description",),
+    "StrategyVersion": ("description", "params"),
     "BacktestResultRow": ("notes", "config", "data_source"),
     "ScreeningResultRow": ("config", "data_source", "rejections"),
 }
