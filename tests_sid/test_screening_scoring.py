@@ -6,8 +6,10 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
+from sid_trading_firm.screening import scoring
 from sid_trading_firm.screening.scoring import (
     ScoringConfig,
+    ScoringError,
     liquidity,
     momentum,
     percentile_ranks,
@@ -91,3 +93,48 @@ def test_a_symbol_whose_factor_cannot_be_computed_is_excluded_not_scored_as_zero
 def test_invalid_scoring_configuration_is_refused(factors, message):
     with pytest.raises(ValidationError, match=message):
         ScoringConfig(factors=factors)
+
+
+@pytest.mark.parametrize("weights, message", [
+    ({"momentum": float("inf")}, "finite number"),
+    ({"momentum": float("-inf")}, "finite number"),
+    ({"momentum": float("nan")}, "finite number"),
+    ({"momentum": 1e308, "trend": 1e308}, "total factor weight must be finite"),
+])
+def test_non_finite_weights_and_totals_are_refused(weights, message):
+    with pytest.raises(ValidationError, match=message):
+        ScoringConfig(factors={n: {"weight": w} for n, w in weights.items()})
+
+
+def _two_symbols():
+    return panel(A=frame(np.linspace(100, 130, 300)), B=frame(np.linspace(100, 110, 300)))
+
+
+@pytest.mark.parametrize("weights", [{"momentum": float("inf")}, {"momentum": 1e308, "trend": 1e308},
+                                     {"momentum": 0.0}])
+def test_scoring_refuses_unvalidated_bad_weights(weights):
+    # model_construct skips validation, standing in for any path that bypasses ScoringConfig checks.
+    from sid_trading_firm.screening.scoring import FactorSpec
+
+    cfg = ScoringConfig.model_construct(factors={n: FactorSpec.model_construct(weight=w, params={})
+                                                 for n, w in weights.items()})
+    with pytest.raises(ScoringError, match="finite and positive"):
+        score(last_view(_two_symbols()), ["A", "B"], cfg)
+
+
+@pytest.mark.parametrize("bad_rank", [float("nan"), float("inf"), -0.5, 1.5])
+def test_non_finite_or_out_of_range_ranks_are_refused(monkeypatch, bad_rank):
+    monkeypatch.setattr(scoring, "percentile_ranks", lambda values: dict.fromkeys(values, bad_rank))
+    cfg = ScoringConfig(factors={"momentum": {"weight": 1.0}})
+    with pytest.raises(ScoringError, match="rank for factor 'momentum'"):
+        score(last_view(_two_symbols()), ["A", "B"], cfg)
+
+
+@pytest.mark.parametrize("bad_composite", [float("nan"), float("inf"), 1.5, -0.1])
+def test_a_non_finite_or_out_of_range_composite_is_refused(monkeypatch, bad_composite):
+    # Finite positive weights with a finite total and ranks in [0, 1] cannot produce this; the
+    # guard is defensive, so the weighted mean is replaced to reach it.
+    monkeypatch.setattr(scoring, "_weighted_mean", lambda weights, ranks, total: bad_composite)
+    cfg = ScoringConfig(factors={"momentum": {"weight": 1.0}})
+    with pytest.raises(ScoringError, match="composite score"):
+        score(last_view(_two_symbols()), ["A", "B"], cfg)
