@@ -4,6 +4,10 @@ Factors are computed point-in-time for the symbols that passed the filters, conv
 to percentile ranks within that set (0 worst .. 1 best), and combined with configured
 weights. A symbol whose required factor cannot be computed is excluded with the
 reason, never scored as zero. Ties break by symbol, so the ranking is deterministic.
+
+Weights must be finite and positive and their total finite; every rank and composite
+must be a finite number in [0, 1]. Anything else raises :class:`ScoringError` rather
+than producing a ranking from undefined numbers.
 """
 
 from __future__ import annotations
@@ -71,10 +75,14 @@ FACTORS: dict[str, Callable[..., float | None]] = {
 }
 
 
+class ScoringError(ValueError):
+    """Scores that cannot be trusted (non-finite or out-of-range weights, ranks or composites)."""
+
+
 class FactorSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    weight: float = Field(gt=0)
+    weight: float = Field(gt=0, allow_inf_nan=False)
     params: dict[str, int] = Field(default_factory=dict)
 
 
@@ -102,6 +110,8 @@ class ScoringConfig(BaseModel):
                 lookback, skip = spec.params.get("lookback", 252), spec.params.get("skip", 21)
                 if not 0 <= skip < lookback:
                     raise ValueError("momentum needs 0 <= skip < lookback")
+        if not math.isfinite(sum(spec.weight for spec in value.values())):
+            raise ValueError("the total factor weight must be finite")
         return value
 
 
@@ -127,6 +137,10 @@ def percentile_ranks(values: Mapping[str, float]) -> dict[str, float]:
     return ((series.rank(method="average") - 1) / (len(series) - 1)).to_dict()
 
 
+def _weighted_mean(weights: Mapping[str, float], ranks: Mapping[str, float], total: float) -> float:
+    return sum(weights[n] * ranks[n] for n in weights) / total
+
+
 def score(view: PanelView, symbols: Sequence[str], cfg: ScoringConfig) -> ScoringResult:
     raw: dict[str, dict[str, float]] = {}
     excluded: dict[str, str] = {}
@@ -142,9 +156,21 @@ def score(view: PanelView, symbols: Sequence[str], cfg: ScoringConfig) -> Scorin
             raw[symbol] = values
     if not raw:
         return ScoringResult([], excluded)
-    total_weight = sum(spec.weight for spec in cfg.factors.values())
+    weights = {name: spec.weight for name, spec in cfg.factors.items()}
+    total_weight = sum(weights.values())
+    bad = {n: w for n, w in weights.items() if not (math.isfinite(w) and w > 0)}
+    if bad or not (math.isfinite(total_weight) and total_weight > 0):
+        raise ScoringError(f"factor weights must be finite and positive with a finite total; got {weights}")
     ranks = {name: percentile_ranks({s: raw[s][name] for s in raw}) for name in cfg.factors}
-    scored = [ScoredSymbol(s, sum(cfg.factors[n].weight * ranks[n][s] for n in cfg.factors) / total_weight,
-                           {n: ranks[n][s] for n in cfg.factors}, raw[s]) for s in raw]
+    scored = []
+    for s in raw:
+        symbol_ranks = {n: ranks[n][s] for n in cfg.factors}
+        for n, r in symbol_ranks.items():
+            if not (math.isfinite(r) and 0.0 <= r <= 1.0):
+                raise ScoringError(f"{s}: rank for factor '{n}' is {r!r}, not a finite number in [0, 1]")
+        composite = _weighted_mean(weights, symbol_ranks, total_weight)
+        if not (math.isfinite(composite) and -1e-12 <= composite <= 1.0 + 1e-12):
+            raise ScoringError(f"{s}: composite score is {composite!r}, not a finite number in [0, 1]")
+        scored.append(ScoredSymbol(s, composite, symbol_ranks, raw[s]))
     scored.sort(key=lambda x: (-x.composite, x.symbol))
     return ScoringResult(scored, excluded)
