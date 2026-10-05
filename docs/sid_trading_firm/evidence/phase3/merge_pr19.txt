@@ -1,0 +1,31 @@
+[main] origin/main == 87936cf
+[identity] head=f5a966d base=main (retargeted: no); unique: f5a966d
+[diff] 11 files changed, 308 insertions(+), 1 deletion(-) since merge base 87936cf
+           M	docs/PHASES.md
+           M	docs/sid_trading_firm/README.md
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr11.txt
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr12.txt
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr13.txt
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr14.txt
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr15.txt
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr16.txt
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr17.txt
+           A	docs/sid_trading_firm/evidence/phase2/merge_pr18.txt
+           A	docs/sid_trading_firm/evidence/phase2/smoke_backtest_report.md
+<stdin>:381: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+[merge] conflict-free; merged tree == main + PR patch (d99b73d7b7c8)
+[upstream] 1 failed, 1258 passed, 4 skipped, 1 deselected, 20 warnings, 99 subtests passed in 34.33s
+           ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+           tests collected=1263 passed=1357 failed=1
+           RESULT: PASS
+[sid] 417 passed, 19 deselected, 3 warnings in 16.73s
+[migrations] upgrade ['alembic_version', 'audit_events', 'backtest_results', 'llm_usage', 'research_runs', 'strategy_versions'] downgrade ['alembic_version'] re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37248015786 on f5a966d: attempt 1: success=6
+[ci-pr] 'SID Trading Firm CI' run 37248015792 on f5a966d: attempt 1: success=4
+[merged] 2a36d94 = merge(87936cf, f5a966d); tree == validated tree
+[ci-main] 'CI' run 37248130842 on 2a36d94: success
+[ci-main] 'SID Trading Firm CI' run 37248130904 on 2a36d94: success
+MERGED PR #19 -> main 2a36d94e009fae25201deb871de669d288051d2b
