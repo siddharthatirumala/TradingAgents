@@ -102,6 +102,8 @@ def test_dotenv_file_is_read_and_environment_beats_it(tmp_path, monkeypatch):
     ("SID_BUDGETS__MAX_AI_COST_PER_RUN_USD", "-1", "greater than 0"),
     ("SID_BUDGETS__MAX_AI_COST_PER_RUN_USD", "50", "cannot exceed"),
     ("SID_BUDGETS__MAX_DEBATE_ROUNDS", "0", "greater than or equal to 1"),
+    ("SID_BUDGETS__MAX_AI_CANDIDATES_PER_RUN", "0", "greater than or equal to 1"),
+    ("SID_BUDGETS__MAX_AI_CANDIDATES_PER_RUN", "51", "less than or equal to 50"),
     ("SID_MODELS__TIERS__FAST__PROVIDER", "nosuchai", "unsupported provider"),
     ("SID_MODELS__AGENTS__MYSTERY_AGENT", "fast", "unknown agent"),
     ("SID_MODELS__AGENTS__CIO", "turbo", "Input should be"),

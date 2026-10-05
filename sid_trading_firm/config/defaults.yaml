@@ -61,6 +61,7 @@ budgets:
   max_agent_iterations: 12
   max_debate_rounds: 1
   max_risk_discuss_rounds: 1
+  max_ai_candidates_per_run: 5     # screening cap (Phase 3); placeholder
   output_token_reserve: 4096
   allow_unpriced_models: false
 
