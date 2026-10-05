@@ -1,0 +1,33 @@
+[main] origin/main == 1d02032
+[identity] head=3405071 base=main (retargeted: yes); unique: 1308e4b 0028c7a 3405071
+[diff] 16 files changed, 742 insertions(+), 26 deletions(-) since merge base 0e44dbe
+           A	docs/sid_trading_firm/baselines/2026-10-02_NVDA_72610e44/llm_calls.jsonl
+           A	docs/sid_trading_firm/baselines/2026-10-02_NVDA_72610e44/report.md
+           A	docs/sid_trading_firm/baselines/2026-10-02_NVDA_72610e44/summary.json
+           M	sid_trading_firm/llm/budget.py
+           M	sid_trading_firm/llm/ledger.py
+           M	sid_trading_firm/llm/report.py
+           M	sid_trading_firm/llm/usage.py
+           M	sid_trading_firm/measurement/baseline.py
+           A	sid_trading_firm/persistence/migrations/versions/0002_llm_usage_call_details.py
+           M	sid_trading_firm/persistence/models.py
+           M	sid_trading_firm/persistence/repositories.py
+           M	tests_sid/persistence_checks.py
+           M	tests_sid/test_baseline_harness.py
+           A	tests_sid/test_call_details.py
+           M	tests_sid/test_persistence.py
+           M	tests_sid/test_persistence_postgres.py
+[merge] conflict-free; merged tree == main + PR patch (50045eafcede)
+[upstream] 1 failed, 1258 passed, 4 skipped, 1 deselected, 20 warnings, 99 subtests passed in 30.42s
+           ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+           tests collected=1263 passed=1357 failed=1
+           RESULT: PASS
+[sid] 301 passed, 16 deselected, 4 warnings in 8.41s
+[migrations] upgrade ['alembic_version', 'audit_events', 'llm_usage', 'research_runs'] downgrade ['alembic_version'] re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37230481852 on 3405071: attempt 2: success=6
+[ci-pr] 'SID Trading Firm CI' run 37230481894 on 3405071: attempt 2: success=4
+[merged] 20d788e = merge(1d02032, 3405071); tree == validated tree
+[ci-main] 'CI' run 37244863159 on 20d788e: success
+[ci-main] 'SID Trading Firm CI' run 37244863130 on 20d788e: success
+MERGED PR #8 -> main 20d788e740ad4b01499440908eb1f5ae178332a2

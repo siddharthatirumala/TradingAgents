@@ -1,0 +1,28 @@
+[main] origin/main == 4ab215f
+[identity] head=f013382 base=main (retargeted: yes); unique: f013382
+[diff] 10 files changed, 1228 insertions(+) since merge base d4f992f
+           A	sid_trading_firm/quant/__init__.py
+           A	sid_trading_firm/quant/costs.py
+           A	sid_trading_firm/quant/expectation.py
+           A	sid_trading_firm/quant/indicators.py
+           A	sid_trading_firm/quant/inputs.py
+           A	sid_trading_firm/quant/result.py
+           A	sid_trading_firm/quant/returns.py
+           A	sid_trading_firm/quant/risk.py
+           A	sid_trading_firm/quant/sizing.py
+           A	tests_sid/test_quant.py
+[merge] conflict-free; merged tree == main + PR patch (f38ccd998187)
+[upstream] 2 failed, 1257 passed, 4 skipped, 1 deselected, 20 warnings, 99 subtests passed in 29.45s
+           ACCEPTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: exception WIN-MEMLOG-CONCURRENT-PERMERROR13 (1 collected error(s), all {'type': 'PermissionError', 'errno': 13, 'winerror': 5, 'strerror': 'Access is denied'}; 7/8 writers complete, 1 incomplete = the 1 that raised, no duplicates)
+           ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+           tests collected=1263 passed=1356 failed=2
+           RESULT: PASS
+[sid] 261 passed, 15 deselected, 4 warnings in 18.04s
+[migrations] upgrade ['alembic_version', 'audit_events', 'llm_usage', 'research_runs'] downgrade ['alembic_version'] re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37224058890 on f013382: attempt 3: success=6
+[ci-pr] 'SID Trading Firm CI' run 37224058837 on f013382: attempt 2: success=4
+[merged] 0b79489 = merge(4ab215f, f013382); tree == validated tree
+[ci-main] 'CI' run 37243848969 on 0b79489: success
+[ci-main] 'SID Trading Firm CI' run 37243848845 on 0b79489: success
+MERGED PR #6 -> main 0b7948980b5b36f2bf08f634321fc906515de8ca

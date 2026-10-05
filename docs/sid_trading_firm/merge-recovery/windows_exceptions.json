@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "applies_to": "local Windows validation during the Phase 1A merge recovery only; GitHub Linux CI must pass these tests unmodified",
+  "exceptions": [
+    {
+      "id": "WIN-YF-CACHE-UNDER-HOME",
+      "nodeid": "tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home",
+      "platform": "win32",
+      "nature": "deterministic on Windows",
+      "signature": {
+        "matcher": "statement_only",
+        "exc_type": "AssertionError",
+        "failing_statement": "assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())"
+      },
+      "cause": "The suite puts yfinance's tz cache in tempfile.mkdtemp(); on Windows %TEMP% is inside the user's home, so the test's 'not under home' assumption fails. Test assumption only.",
+      "reproduction": {
+        "pristine_pinned_upstream": "1394a3f72aa4393e1a98f51b382434c4b4c2d972 (TradingAgents v0.6.0, the pin in sid_trading_firm/upstream.py)",
+        "pristine_result": "5/5 runs failed with this signature (2026-10-04)",
+        "phase1a_result": "fails on every local run of every PR head (deterministic)",
+        "environment": "Microsoft Windows 11 Home 10.0.26200, Python 3.14.7"
+      },
+      "affected_scope": "upstream test only; no product code path",
+      "phase1a_changed_code_path": false,
+      "required_ci": "passes in GitHub Actions workflow 'CI', jobs tests (py3.11, py3.12 America/New_York, py3.13, py3.14) on ubuntu-latest",
+      "owner": "siddharthatirumala (project owner)",
+      "owner_approval": {"status": "approved", "date": "2026-10-04", "reference": "Phase 1A brief: upstream suite must pass 'except for the already identified Windows-only environment issue'"},
+      "expires": "2026-10-31",
+      "expiry_condition": "proposed by Claude Code; owner to confirm. Ends at the Phase 1A gate record or 2026-10-31, whichever is first; renewal needs owner re-approval",
+      "removal_path": "upstream fix (assert against tempfile.gettempdir() instead of Path.home()) or an upstream sync that changes the test"
+    },
+    {
+      "id": "WIN-MEMLOG-CONCURRENT-PERMERROR13",
+      "nodeid": "tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome",
+      "platform": "win32",
+      "nature": "intermittent on Windows (file-locking race)",
+      "signature": {
+        "matcher": "exclusive_error_collection",
+        "exc_type": "AssertionError",
+        "failing_statement": "assert errors == []",
+        "each_error": {"type": "PermissionError", "errno": 13, "winerror": 5, "strerror": "Access is denied"},
+        "writer_integrity": {"writers": 8, "entries_per_writer": 12}
+      },
+      "cause": "Concurrent writers replacing the shared memory-log file on Windows occasionally get ERROR_ACCESS_DENIED (winerror 5 / errno 13) while another handle holds the file; the raising writer stops, so only its remaining entries are absent.",
+      "reproduction": {
+        "pristine_pinned_upstream": "1394a3f72aa4393e1a98f51b382434c4b4c2d972 (TradingAgents v0.6.0, the pin in sid_trading_firm/upstream.py)",
+        "pristine_result": "5/30 runs failed (2026-10-04, structured evidence); earlier text-based run 2/15. In every failure all collected errors were PermissionError(13, winerror 5) and only the raising writers were incomplete",
+        "phase1a_result": "earlier text-based run on Phase 1A code 4/15; structured reproduction on main+PR#5 recorded in the PR #5 validation log",
+        "environment": "Microsoft Windows 11 Home 10.0.26200, Python 3.14.7"
+      },
+      "affected_scope": "upstream test of tradingagents/memory/log.py and tradingagents/dataflows/files.py; no Phase 1A change to either (0 files differ from the pin)",
+      "phase1a_changed_code_path": false,
+      "required_ci": "passes in GitHub Actions workflow 'CI', jobs tests (py3.11, py3.12 America/New_York, py3.13, py3.14) on ubuntu-latest",
+      "owner": "siddharthatirumala (project owner)",
+      "owner_approval": {"status": "approved", "date": "2026-10-04", "reference": "owner message: 'accepted as a known pre-existing Windows-only intermittent upstream failure'"},
+      "expires": "2026-10-31",
+      "expiry_condition": "proposed by Claude Code; owner to confirm. Ends at the Phase 1A gate record or 2026-10-31, whichever is first; renewal needs owner re-approval",
+      "removal_path": "upstream retry/locking fix in the memory log writer, or a Windows-aware test"
+    }
+  ]
+}

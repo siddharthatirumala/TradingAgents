@@ -1,0 +1,102 @@
+evidence: pristine_cc_24.jsonl (1 error), pristine_yf_1.jsonl; exceptions: windows_exceptions.json; today=2026-10-04
+
+## A1 accepted: real concurrency failure, 1 PermissionError(13): PASS (as expected)
+   ACCEPTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: exception WIN-MEMLOG-CONCURRENT-PERMERROR13 (1 collected error(s), all {'type': 'PermissionError', 'errno': 13, 'winerror': 5, 'strerror': 'Access is denied'}; 7/8 writers complete, 1 incomplete = the 1 that raised, no duplicates)
+   tests collected=1 passed=0 failed=1
+   RESULT: PASS
+
+## A2 accepted: real concurrency failure, 2 PermissionError(13): PASS (as expected)
+   ACCEPTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: exception WIN-MEMLOG-CONCURRENT-PERMERROR13 (2 collected error(s), all {'type': 'PermissionError', 'errno': 13, 'winerror': 5, 'strerror': 'Access is denied'}; 6/8 writers complete, 2 incomplete = the 2 that raised, no duplicates)
+   tests collected=1 passed=0 failed=1
+   RESULT: PASS
+
+## A3 accepted: real yfinance home-path failure: PASS (as expected)
+   ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+   tests collected=1 passed=0 failed=1
+   RESULT: PASS
+
+## A4 accepted: both known failures in one run: PASS (as expected)
+   ACCEPTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: exception WIN-MEMLOG-CONCURRENT-PERMERROR13 (1 collected error(s), all {'type': 'PermissionError', 'errno': 13, 'winerror': 5, 'strerror': 'Access is denied'}; 7/8 writers complete, 1 incomplete = the 1 that raised, no duplicates)
+   ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+   tests collected=1 passed=0 failed=2
+   RESULT: PASS
+
+## R1 rejected: mixed errors (PermissionError + ValueError): FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: error 1 has type='ValueError', required 'PermissionError' (mixed evidence)
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R2 rejected: empty errors collection: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: evidence empty: the `errors` collection has no items
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R3 rejected: errors evidence missing: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: evidence missing: the test's `errors` collection was not captured
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R4 rejected: unparseable report line: FAIL (as expected)
+   REJECTED report: report line 4 is not valid JSON (Expecting property name enclosed in double quotes)
+
+## R5 rejected: a different test failed: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_other: no recorded exception for this test
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R6 rejected: PermissionError with errno 32: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: error 0 has errno=32, required 13 (mixed evidence)
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R7 rejected: winerror 32 (sharing violation), not 5: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: error 0 has winerror=32, required 5 (mixed evidence)
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R8 rejected: exception expired: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: exception WIN-MEMLOG-CONCURRENT-PERMERROR13 expired on 2026-10-31
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R9 rejected: wrong platform (linux): FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: exception WIN-MEMLOG-CONCURRENT-PERMERROR13 applies to win32, not linux
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R10 rejected: no tests collected: FAIL (as expected)
+   REJECTED report: no tests were collected
+
+## R11 rejected: another writer's data lost: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: data integrity: 2 writer(s) incomplete but only 1 raised; another writer's data was lost
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R12 rejected: duplicate entries: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: data integrity: 1 duplicate entries
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R13 rejected: different failing assertion: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: failing statement 'assert len(entries) == len(tickers) * len(dates)' != 'assert errors == []'
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R14 rejected: failure in setup, not the test call: FAIL (as expected)
+   REJECTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: failed in 'setup', not in the test call
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+## R15 rejected: collection error: FAIL (as expected)
+   REJECTED collection error: tests/test_x.py
+
+## R16 rejected: truncated report (no session finish): FAIL (as expected)
+   REJECTED report: incomplete (session start or finish missing)
+
+## R17 rejected: yfinance test failing with another statement: FAIL (as expected)
+   REJECTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: failing statement 'assert False' != 'assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())'
+   tests collected=1 passed=0 failed=1
+   RESULT: FAIL
+
+SELFTEST: 21/21 verdicts correct
+
