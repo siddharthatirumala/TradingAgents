@@ -38,6 +38,23 @@ pytest tests_sid              # SID Trading Firm suite
 ruff check .
 ```
 
+## Deterministic backtesting
+
+Strategies are evaluated with deterministic Python only (`sid_trading_firm/backtest`,
+`sid_trading_firm/strategies`); no AI model is involved, because an LLM analysing a past
+date may already know what happened. A YAML specification names the data, the strategy
+and its parameters, costs, slippage and the evaluation (train/validation/test split
+and walk-forward):
+
+```bash
+python -m sid_trading_firm.backtest.run docs/sid_trading_firm/examples/backtest_momentum.yaml --out <dir>
+```
+
+The report states its assumptions and limitations (adjusted prices, survivorship
+bias, cost assumptions, in-sample versus out-of-sample). Add `--database` to store
+the results (needs `SID_DATABASE__URL`). Signals use data up to each decision date
+and orders fill at the next open; this is simulation only and never places an order.
+
 ## Status
 
 Phase 1 foundation in progress. See [decisions.md](decisions.md) for the
