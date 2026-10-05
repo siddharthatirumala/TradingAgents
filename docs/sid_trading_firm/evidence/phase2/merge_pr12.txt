@@ -1,0 +1,21 @@
+[main] origin/main == de36afd
+[identity] head=0bd0dd2 base=main (retargeted: no); unique: 0bd0dd2
+[diff] 3 files changed, 427 insertions(+) since merge base de36afd
+           A	sid_trading_firm/backtest/__init__.py
+           A	sid_trading_firm/backtest/data.py
+           A	tests_sid/test_backtest_data.py
+[merge] conflict-free; merged tree == main + PR patch (4e018864c87d)
+[upstream] 2 failed, 1257 passed, 4 skipped, 1 deselected, 20 warnings, 99 subtests passed in 32.89s
+           ACCEPTED tests/test_memory_log.py::test_concurrent_writers_keep_every_decision_and_outcome: exception WIN-MEMLOG-CONCURRENT-PERMERROR13 (1 collected error(s), all {'type': 'PermissionError', 'errno': 13, 'winerror': 5, 'strerror': 'Access is denied'}; 7/8 writers complete, 1 incomplete = the 1 that raised, no duplicates)
+           ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+           tests collected=1263 passed=1356 failed=2
+           RESULT: PASS
+[sid] 350 passed, 16 deselected, 3 warnings in 10.11s
+[migrations] upgrade ['alembic_version', 'audit_events', 'llm_usage', 'research_runs'] downgrade ['alembic_version'] re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37245918364 on 0bd0dd2: attempt 1: success=6
+[ci-pr] 'SID Trading Firm CI' run 37245918288 on 0bd0dd2: attempt 1: success=4
+[merged] 27969b1 = merge(de36afd, 0bd0dd2); tree == validated tree
+[ci-main] 'CI' run 37246026218 on 27969b1: success
+[ci-main] 'SID Trading Firm CI' run 37246026216 on 27969b1: success
+MERGED PR #12 -> main 27969b1d93d99969a97395f8d07c6b2f9b6352bf

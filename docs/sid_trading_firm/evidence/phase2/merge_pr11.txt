@@ -1,0 +1,50 @@
+[main] origin/main == a66753d
+[identity] head=a5961a8 base=main (retargeted: no); unique: a5961a8
+[diff] 30 files changed, 2649 insertions(+) since merge base a66753d
+           A	docs/PHASES.md
+           A	docs/sid_trading_firm/merge-recovery/README.md
+           A	docs/sid_trading_firm/merge-recovery/backtest_intermittent_evidence.md
+           A	docs/sid_trading_firm/merge-recovery/check_upstream_failures.py
+           A	docs/sid_trading_firm/merge-recovery/checker_selftest.py
+           A	docs/sid_trading_firm/merge-recovery/evidence/main_a66753d_upstream.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_cc_24.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_cc_26.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_cc_29.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_cc_6.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_cc_7.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_yf_1.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_yf_2.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_yf_3.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_yf_4.jsonl
+           A	docs/sid_trading_firm/merge-recovery/evidence/pristine_yf_5.jsonl
+           A	docs/sid_trading_firm/merge-recovery/logs/checker_selftest.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/merge_pr10.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/merge_pr5.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/merge_pr6.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/merge_pr7.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/merge_pr8.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/merge_pr9.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/validate_pr5.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/validate_pr5_c783be7.txt
+           A	docs/sid_trading_firm/merge-recovery/logs/validate_pr5_e0e485b.txt
+           A	docs/sid_trading_firm/merge-recovery/merge_pr.sh
+           A	docs/sid_trading_firm/merge-recovery/sid_validation_plugin.py
+           A	docs/sid_trading_firm/merge-recovery/validate_pr.sh
+           A	docs/sid_trading_firm/merge-recovery/windows_exceptions.json
+<stdin>:2008: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+[merge] conflict-free; merged tree == main + PR patch (c243aa489666)
+[upstream] 1 failed, 1258 passed, 4 skipped, 1 deselected, 20 warnings, 99 subtests passed in 30.69s
+           ACCEPTED tests/test_suite_isolation.py::test_yfinance_keeps_its_cache_out_of_the_users_home: exception WIN-YF-CACHE-UNDER-HOME (AssertionError at `assert not Path(_TzDBManager.get_location()).is_relative_to(Path.home())`)
+           tests collected=1263 passed=1357 failed=1
+           RESULT: PASS
+[sid] 323 passed, 16 deselected, 3 warnings in 9.75s
+[migrations] upgrade ['alembic_version', 'audit_events', 'llm_usage', 'research_runs'] downgrade ['alembic_version'] re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37245728122 on a5961a8: attempt 1: success=6
+[ci-pr] 'SID Trading Firm CI' run 37245728077 on a5961a8: attempt 1: success=4
+[merged] de36afd = merge(a66753d, a5961a8); tree == validated tree
+[ci-main] 'CI' run 37245826085 on de36afd: success
+[ci-main] 'SID Trading Firm CI' run 37245826082 on de36afd: success
+MERGED PR #11 -> main de36afda4ea1967a657dd2694abb9b87afb63473

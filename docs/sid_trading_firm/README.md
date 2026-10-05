@@ -57,6 +57,7 @@ and orders fill at the next open; this is simulation only and never places an or
 
 ## Status
 
-Phase 1 foundation in progress. See [decisions.md](decisions.md) for the
+Phase 1A (foundation) and Phase 2 (deterministic backtesting) are merged; Phase 3
+(screening) is in progress. Gate records: [../PHASES.md](../PHASES.md). See [decisions.md](decisions.md) for the
 approved architecture decisions and [development.md](development.md) for the
 branch, pull-request and upstream-sync workflow.
