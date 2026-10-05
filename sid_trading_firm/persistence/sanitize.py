@@ -102,6 +102,8 @@ SANITIZED_COLUMNS = {
     "ResearchRun": ("error", "summary", "config_snapshot"),
     "AuditEvent": ("message", "payload", "actor"),
     "LLMUsage": ("error_message", "error_type"),
+    "StrategyVersion": ("description",),
+    "BacktestResultRow": ("notes", "config", "data_source"),
 }
 
 
