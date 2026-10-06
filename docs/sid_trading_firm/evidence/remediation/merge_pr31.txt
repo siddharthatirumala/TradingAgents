@@ -1,0 +1,24 @@
+[main] origin/main == 46c2601
+[identity] head=e3a6e2e base=main commits: b615998 c4f9c2e e3a6e2e
+[diff] 10 files changed, 656 insertions(+), 40 deletions(-) since merge base 93de756
+           M	docs/sid_trading_firm/README.md
+           A	sid_trading_firm/backtest/oos.py
+           M	sid_trading_firm/backtest/run.py
+           M	sid_trading_firm/persistence/backtests.py
+           A	sid_trading_firm/persistence/migrations/versions/0005_backtest_equity.py
+           M	sid_trading_firm/persistence/models.py
+           M	sid_trading_firm/screening/run.py
+           A	tests_sid/test_backtest_artifacts.py
+           A	tests_sid/test_backtest_equity_persistence.py
+           M	tests_sid/test_screening_run.py
+[merge] conflict-free; merged tree == predicted (43c4c602bbac)
+[sid] 613 passed, 26 deselected, 3 warnings in 77.73s (0:01:17)
+[migrations] upgrade 8 tables, downgrade ['alembic_version'], re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37377710830 on e3a6e2e: success, all jobs green
+[ci-pr] 'SID Trading Firm CI' run 37377710860 on e3a6e2e: success, all jobs green
+[gitleaks] 3 commits scanned no leaks found 
+[merged] 69c3ab5 = merge(46c2601, e3a6e2e); tree == predicted
+[ci-main] 'CI' run 37382921254 on 69c3ab5: success
+[ci-main] 'SID Trading Firm CI' run 37382921480 on 69c3ab5: success
+MERGED PR #31 -> main 69c3ab58f9886e105a39c0fe82c6300ff17d8f4a

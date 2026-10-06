@@ -1,0 +1,21 @@
+[main] origin/main == 08878c7
+[identity] head=b5fc2cf base=main commits: 6bef849 b5fc2cf
+[diff] 7 files changed, 289 insertions(+), 9 deletions(-) since merge base 93de756
+           M	sid_trading_firm/backtest/run.py
+           M	sid_trading_firm/persistence/backtests.py
+           M	sid_trading_firm/persistence/sanitize.py
+           M	sid_trading_firm/strategies/__init__.py
+           M	sid_trading_firm/strategies/registry.py
+           M	tests_sid/test_backtest_persistence.py
+           A	tests_sid/test_strategy_credentials.py
+[merge] conflict-free; merged tree == predicted (395e5988e94c)
+[sid] 578 passed, 25 deselected, 3 warnings in 76.69s (0:01:16)
+[migrations] upgrade 8 tables, downgrade ['alembic_version'], re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37345489071 on b5fc2cf: success, all jobs green
+[ci-pr] 'SID Trading Firm CI' run 37345489169 on b5fc2cf: success, all jobs green
+[gitleaks] 2 commits scanned no leaks found 
+[merged] b02b8fb = merge(08878c7, b5fc2cf); tree == predicted
+[ci-main] 'CI' run 37382041349 on b02b8fb: success
+[ci-main] 'SID Trading Firm CI' run 37382041358 on b02b8fb: success
+MERGED PR #29 -> main b02b8fb44e0b591b98440de204246ea5a5eaf44f
