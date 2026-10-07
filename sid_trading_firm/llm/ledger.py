@@ -87,6 +87,13 @@ def _message_chars(message: Any) -> int:
     return chars
 
 
+def _schema_chars(kwargs: dict[str, Any]) -> int:
+    """Characters of tool definitions and structured-output schema sent with the prompt."""
+    params = kwargs.get("invocation_params") or {}
+    fmt = (kwargs.get("options") or {}).get("ls_structured_output_format")
+    return sum(len(json.dumps(part, default=str)) for part in (params.get("tools"), fmt) if part)
+
+
 def _structured_method(kwargs: dict[str, Any]) -> str | None:
     """The structured-output method LangChain bound for this call, if any."""
     fmt = (kwargs.get("options") or {}).get("ls_structured_output_format") or {}
@@ -173,7 +180,9 @@ class UsageLedger(BaseCallbackHandler):
         auth = self.guard.authorize(
             run_id=current_run_id() or self._fixed_run_id,
             agent=agent, provider=provider, model=model,
-            prompt_chars=prompt_chars, max_output_tokens=int(max_out) if max_out else None,
+            # Tool and schema text is billed as input too, so it counts in the worst case.
+            prompt_chars=prompt_chars + _schema_chars(kwargs),
+            max_output_tokens=int(max_out) if max_out else None,
         )
         with self._lock:
             self._pending[lc_run_id] = _Pending(auth, provider, model, node, prompt_chars,

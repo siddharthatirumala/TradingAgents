@@ -6,6 +6,7 @@ from sid_trading_firm.llm.budget import (
     BudgetGuard,
     BudgetStopEvent,
     LedgerUnavailable,
+    LifetimeBudgetExhausted,
     NoRunForCall,
     UnpricedModel,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "LLMCallRecord",
     "LedgerUnavailable",
     "NoRunForCall",
+    "LifetimeBudgetExhausted",
     "UnpricedModel",
     "UsageLedger",
     "UsageStore",

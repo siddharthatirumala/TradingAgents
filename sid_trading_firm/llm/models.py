@@ -16,10 +16,14 @@ from sid_trading_firm.config.settings import ConfigError, ModelSpec, Settings, T
 
 
 def _client_kwargs(spec: ModelSpec) -> dict[str, Any]:
-    """Upstream's keyword arguments for one spec, via upstream's own translator."""
+    """Upstream's keyword arguments for one spec, via upstream's own translator.
+
+    SDK retries are switched off: each budget authorisation covers exactly one attempt,
+    and a retry made by the application is a new call that passes the budget guard.
+    """
     from tradingagents.llm_clients.factory import build_llm_kwargs
 
-    return build_llm_kwargs({
+    return {**build_llm_kwargs({
         "llm_provider": spec.provider,
         "temperature": spec.temperature,
         "max_tokens": spec.max_output_tokens,
@@ -27,7 +31,7 @@ def _client_kwargs(spec: ModelSpec) -> dict[str, Any]:
         "openai_reasoning_effort": spec.reasoning_effort,
         "anthropic_effort": spec.reasoning_effort,
         "google_thinking_level": spec.reasoning_effort,
-    })
+    }), "max_retries": 0}
 
 
 def chat_model(spec: ModelSpec, callbacks: Sequence[Any] = ()) -> Any:

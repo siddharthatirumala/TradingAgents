@@ -196,6 +196,9 @@ class BudgetSettings(Strict):
             raise ValueError("max_ai_cost_per_run_usd cannot exceed max_ai_cost_per_day_usd")
         if self.max_ai_cost_per_day_usd > self.max_ai_cost_total_usd:
             raise ValueError("max_ai_cost_per_day_usd cannot exceed max_ai_cost_total_usd")
+        if self.allow_unpriced_models:
+            raise ValueError("allow_unpriced_models cannot be true: an unpriced call cannot be held to the "
+                             "lifetime AI budget")
         return self
 
 
