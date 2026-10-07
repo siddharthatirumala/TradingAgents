@@ -24,7 +24,15 @@ from functools import cache
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -167,6 +175,9 @@ class ModelPrice(Strict):
 class BudgetSettings(Strict):
     max_ai_cost_per_run_usd: Annotated[Decimal, Field(gt=0)]
     max_ai_cost_per_day_usd: Annotated[Decimal, Field(gt=0)]
+    # Lifetime ceiling on all paid AI spend for Phase 1B measurement (owner, 2026-10-08:
+    # "hard maximum ... $30 total"). The bound is in code so configuration cannot raise it.
+    max_ai_cost_total_usd: Annotated[Decimal, Field(gt=0, le=Decimal("30.00"))]
     max_llm_tokens_per_agent: Annotated[int, Field(gt=0)]
     max_agent_iterations: Annotated[int, Field(gt=0)]
     max_debate_rounds: Annotated[int, Field(ge=1)]
@@ -183,12 +194,16 @@ class BudgetSettings(Strict):
     def _run_within_day(self) -> BudgetSettings:
         if self.max_ai_cost_per_run_usd > self.max_ai_cost_per_day_usd:
             raise ValueError("max_ai_cost_per_run_usd cannot exceed max_ai_cost_per_day_usd")
+        if self.max_ai_cost_per_day_usd > self.max_ai_cost_total_usd:
+            raise ValueError("max_ai_cost_per_day_usd cannot exceed max_ai_cost_total_usd")
         return self
 
 
 # -------------------------------------------------------------------------- risk
 
 Percent = Annotated[float, Field(gt=0, le=100)]
+# US-listed symbol as written by the Yahoo data layer (share classes as BRK-B).
+UsSymbol = Annotated[str, StringConstraints(pattern=r"^[A-Z]{1,5}(-[A-Z])?$")]
 
 
 class RiskSettings(Strict):
@@ -206,6 +221,10 @@ class RiskSettings(Strict):
     max_trades_per_day: Annotated[int, Field(gt=0)] | None = None
     min_avg_daily_volume: Annotated[float, Field(gt=0)] | None = None
     max_data_age_seconds: Annotated[int, Field(gt=0)] | None = None
+    # Phase 1B additions, equally unset until the owner approves values.
+    allowed_instruments: Annotated[list[UsSymbol], Field(min_length=1)] | None = None
+    max_order_notional: Annotated[Decimal, Field(gt=0)] | None = None
+    policy_version: Annotated[str, Field(min_length=1, max_length=64)] | None = None
 
     @property
     def unset(self) -> list[str]:
@@ -214,6 +233,43 @@ class RiskSettings(Strict):
     @property
     def complete(self) -> bool:
         return not self.unset
+
+
+# ---------------------------------------------------------------------- research
+
+
+class FreshnessSettings(Strict):
+    """Snapshot freshness thresholds for Phase 1B research. No defaults: the owner sets them."""
+
+    prices_max_age_trading_days: Annotated[int, Field(ge=0)] | None = None
+    fundamentals_max_age_days: Annotated[int, Field(gt=0)] | None = None
+    news_window_hours: Annotated[int, Field(gt=0)] | None = None
+    news_min_items: Annotated[int, Field(ge=0)] | None = None
+    macro_max_age_days: Annotated[int, Field(gt=0)] | None = None
+
+
+class ResearchSettings(Strict):
+    """Phase 1B research switch. Off by default; zero-spend (mocked models) is the only mode.
+
+    Turning research on with any freshness threshold or the news cap unset is refused
+    at load, so a run can never start with an undefined data rule.
+    """
+
+    enabled: bool = False
+    model_mode: Literal["mock"] = "mock"
+    max_news_items_per_instrument: Annotated[int, Field(gt=0)] | None = None
+    freshness: FreshnessSettings = Field(default_factory=FreshnessSettings)
+
+    @property
+    def unset(self) -> list[str]:
+        missing = [f"freshness.{k}" for k, v in self.freshness.model_dump().items() if v is None]
+        return missing + (["max_news_items_per_instrument"] if self.max_news_items_per_instrument is None else [])
+
+    @model_validator(mode="after")
+    def _complete_when_enabled(self) -> ResearchSettings:
+        if self.enabled and self.unset:
+            raise ValueError(f"research cannot be enabled while these are unset: {', '.join(self.unset)}")
+        return self
 
 
 # ---------------------------------------------------------------- db and logging
@@ -256,6 +312,7 @@ class Settings(BaseSettings):
     pricing: dict[str, ModelPrice]
     budgets: BudgetSettings
     risk: RiskSettings
+    research: ResearchSettings
     database: DatabaseSettings
     logging: LoggingSettings
 
@@ -278,6 +335,11 @@ class Settings(BaseSettings):
 
     def price_for(self, provider: str, model: str) -> ModelPrice | None:
         return self.pricing.get(f"{provider.lower()}/{model}")
+
+    def require_research_ready(self) -> None:
+        """Raise :class:`ConfigError` unless Phase 1B research is switched on (and therefore complete)."""
+        if not self.research.enabled:
+            raise ConfigError("research is disabled (research.enabled is false)")
 
     def snapshot(self) -> dict[str, Any]:
         """The settings as plain data with secrets masked, for run records."""
