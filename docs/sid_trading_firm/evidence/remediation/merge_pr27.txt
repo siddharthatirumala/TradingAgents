@@ -1,0 +1,22 @@
+[main] origin/main == 93de756
+[identity] head=98a9750 base=main commits: 98a9750
+[diff] 8 files changed, 608 insertions(+), 200 deletions(-) since merge base 93de756
+           M	docs/sid_trading_firm/merge-recovery/README.md
+           M	docs/sid_trading_firm/merge-recovery/check_upstream_failures.py
+           D	docs/sid_trading_firm/merge-recovery/checker_selftest.py
+           M	docs/sid_trading_firm/merge-recovery/merge_pr.sh
+           M	docs/sid_trading_firm/merge-recovery/sid_validation_plugin.py
+           M	docs/sid_trading_firm/merge-recovery/validate_pr.sh
+           M	docs/sid_trading_firm/merge-recovery/windows_exceptions.json
+           A	tests_sid/test_upstream_failure_checker.py
+[merge] conflict-free; merged tree == predicted (c74f5b55e79f)
+[sid] 527 passed, 22 deselected, 3 warnings in 86.61s (0:01:26)
+[migrations] upgrade 8 tables, downgrade ['alembic_version'], re-upgrade ok
+[ruff] All checks passed!
+[ci-pr] 'CI' run 37332208028 on 98a9750: success, all jobs green
+[ci-pr] 'SID Trading Firm CI' run 37332208030 on 98a9750: success, all jobs green
+[gitleaks] 1 commits scanned no leaks found 
+[merged] 56aa28b = merge(93de756, 98a9750); tree == predicted
+[ci-main] 'CI' run 37381168291 on 56aa28b: success
+[ci-main] 'SID Trading Firm CI' run 37381168234 on 56aa28b: success
+MERGED PR #27 -> main 56aa28b67c7e0fe0c780c5acdfd4b02d4fe7e7f6

@@ -74,9 +74,6 @@ python -m sid_trading_firm.screening.run docs/sid_trading_firm/examples/screen_l
 
 ## Status
 
-Phase 1A (foundation), Phase 2 (deterministic backtesting) and Phase 3 (deterministic
-screening) are merged and awaiting Codex's consolidated review
-([reviews/2026-10-05_consolidated_review_package.md](reviews/2026-10-05_consolidated_review_package.md)).
-No further phase is authorised. Gate records: [../PHASES.md](../PHASES.md). See [decisions.md](decisions.md) for the
+Phases 1A (foundation), 2 (deterministic backtesting) and 3 (deterministic screening) are closed with Codex's technical approval after remediation; final `main` `69c3ab5`. **No next phase is authorised.** Gate records: [../PHASES.md](../PHASES.md). See [decisions.md](decisions.md) for the
 approved architecture decisions and [development.md](development.md) for the
 branch, pull-request and upstream-sync workflow.
