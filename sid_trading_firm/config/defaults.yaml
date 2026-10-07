@@ -57,6 +57,7 @@ models:
 budgets:
   max_ai_cost_per_run_usd: 3.00
   max_ai_cost_per_day_usd: 10.00
+  max_ai_cost_total_usd: 30.00     # lifetime Phase 1B measurement ceiling (owner, 2026-10-08); code caps it at 30
   max_llm_tokens_per_agent: 300000
   max_agent_iterations: 12
   max_debate_rounds: 1
@@ -76,6 +77,22 @@ risk:
   max_trades_per_day: null
   min_avg_daily_volume: null
   max_data_age_seconds: null
+  allowed_instruments: null
+  max_order_notional: null
+  policy_version: null
+
+# Phase 1B research (zero-spend). Off by default; enabling it requires every value
+# below. Only mocked models are allowed.
+research:
+  enabled: false
+  model_mode: mock
+  max_news_items_per_instrument: null
+  freshness:
+    prices_max_age_trading_days: null
+    fundamentals_max_age_days: null
+    news_window_hours: null
+    news_min_items: null
+    macro_max_age_days: null
 
 database:
   url: null        # set SID_DATABASE__URL in .env
