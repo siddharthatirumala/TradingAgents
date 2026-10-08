@@ -34,10 +34,10 @@ from sid_trading_firm.config import ConfigError, Settings, Tier, load_settings
 from sid_trading_firm.config.agents import UPSTREAM_NODE_AGENTS, display_name
 from sid_trading_firm.llm import (
     AIBudgetStop,
-    BudgetGuard,
     BudgetStopEvent,
     JsonlUsageStore,
     UsageLedger,
+    guard_for,
 )
 from sid_trading_firm.llm.models import upstream_config
 from sid_trading_firm.llm.report import capped_calls, render_markdown, summarize
@@ -142,12 +142,21 @@ def run_baseline(
     analysts: tuple[str, ...] = ALL_ANALYSTS,
     label: str = DEFAULT_LABEL,
 ) -> BaselineResult:
-    """Run one metered upstream analysis and write its report. Never raises for a stopped run."""
-    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    """Run one metered upstream analysis and write its report. Never raises for a stopped run.
 
+    Refuses to run with upstream's real model clients while ``research.model_mode`` is
+    "mock" (paid model calls are blocked); tests substitute scripted clients.
+    """
+    from tradingagents.graph import trading_graph
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.llm_clients import factory
+
+    if settings.research.model_mode == "mock" and trading_graph.create_tier_client is factory.create_tier_client:
+        raise ConfigError("paid model calls are blocked: research.model_mode is 'mock', and this run would "
+                          "use real provider clients")
     ticker = check_us_equity(ticker)
     store = JsonlUsageStore(ledger_path)
-    guard = BudgetGuard(settings.budgets, settings.pricing, store)
+    guard = guard_for(settings, store)
     fallbacks = _FallbackCounter()
     logging.getLogger("tradingagents.agents.structured").addHandler(fallbacks)
     scratch = Path(tempfile.mkdtemp(prefix="sid-baseline-"))
@@ -331,8 +340,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     logger.info("API keys present for: %s", ", ".join(keys))
-    result = run_baseline(ticker, args.date or previous_weekday(), settings=settings,
-                          out_root=args.out, ledger_path=args.ledger, label=args.label)
+    try:
+        result = run_baseline(ticker, args.date or previous_weekday(), settings=settings,
+                              out_root=args.out, ledger_path=args.ledger, label=args.label)
+    except ConfigError as exc:          # paid model calls blocked, or an unsafe ledger
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     print(f"{result.status}: report at {result.out_dir / 'report.md'}")
     return 0 if result.status == "completed" else 1
 

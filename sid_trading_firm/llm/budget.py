@@ -23,8 +23,17 @@ within the cap. The first refusal writes a permanent marker; from then on every
 call, in any process, is refused. Model clients are built without SDK retries, so
 one authorised call is one attempt; an application-level retry is a new call that
 passes the guard again. After a call, if its recorded cost has taken lifetime spend
-past the cap (possible only if the provider billed more than the worst case), the
-permanent stop is written at once.
+past the cap, the permanent stop is written at once.
+
+The cap is a software authorisation ceiling, not a provider-side spending limit. It
+holds on the assumption that a provider never bills a call more than its worst case
+(estimated prompt tokens plus the full output cap, no cache discount, at the prices
+in ``pricing.yaml``). If providers bill above that, spend can pass the cap by at most
+the excess of the calls already in flight when the first over-billed call is recorded
+(one call when calls are sequential); no call is authorised after that.
+
+Paid model calls require a durable, cross-process ledger (PostgreSQL
+``SqlUsageStore``): see :func:`guard_for`.
 """
 
 from __future__ import annotations
@@ -39,7 +48,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sid_trading_firm.config.settings import BudgetSettings, ModelPrice
+from sid_trading_firm.config.settings import BudgetSettings, ConfigError, ModelPrice, Settings
 from sid_trading_firm.llm.pricing import worst_case_cost
 from sid_trading_firm.llm.usage import LLMCallRecord, UsageStore
 
@@ -95,6 +104,19 @@ class LifetimeBudgetExhausted(BudgetExceeded):
 
 class NoRunForCall(AIBudgetStop):
     """A model call happened outside any run; it cannot be attributed or budgeted."""
+
+
+def guard_for(settings: Settings, store: UsageStore) -> BudgetGuard:
+    """The budget guard for a run under ``settings``; the one place guards should be built.
+
+    In any mode other than mock (paid model calls), the ledger must be durable and safe
+    across processes, so an open reservation can neither vanish in a crash nor be
+    overlooked by a concurrent process: only PostgreSQL ``SqlUsageStore`` qualifies.
+    """
+    if settings.research.model_mode != "mock" and not getattr(store, "durable_cross_process", False):
+        raise ConfigError(f"paid model mode requires the PostgreSQL usage ledger (SqlUsageStore); "
+                          f"{type(store).__name__} is not durable across processes")
+    return BudgetGuard(settings.budgets, settings.pricing, store)
 
 
 @dataclass(frozen=True)
@@ -176,6 +198,7 @@ class BudgetGuard:
             if self._lifetime_stop is not None:
                 raise LifetimeBudgetExhausted(self._lifetime_stop)
             state = self._runs.setdefault(run_id, _RunState())
+            self._check_permanent_stop(state, run_id, agent)       # before any other limit
             if state.stop is not None:
                 raise BudgetExceeded(state.stop)
 
@@ -294,21 +317,28 @@ class BudgetGuard:
 
     # ---------------------------------------------------------------- internal
 
+    def _check_permanent_stop(self, state: _RunState, run_id: str, agent: str) -> None:
+        try:
+            exhausted = self.store.lifetime_exhausted()
+        except Exception as exc:
+            self._trip(state, LedgerUnavailable, BudgetStopEvent(
+                reason="ledger_unavailable", run_id=run_id, agent=agent,
+                detail=f"could not check the lifetime budget: {type(exc).__name__}"))
+        if exhausted:
+            self._exhaust(run_id, agent, None, "the lifetime AI budget was already exhausted", state=state)
+
     def _reserve_lifetime(self, state: _RunState, call_id: str, run_id: str, agent: str,
                           reserve: Decimal) -> None:
         cap = self.budgets.max_ai_cost_total_usd
         try:
-            exhausted = self.store.lifetime_exhausted()
-            ok, spent = (False, None) if exhausted else self.store.try_reserve(
-                call_id=call_id, run_id=run_id, agent=agent, amount=reserve, cap=cap)
+            ok, spent = self.store.try_reserve(call_id=call_id, run_id=run_id, agent=agent, amount=reserve, cap=cap)
         except Exception as exc:
             self._trip(state, LedgerUnavailable, BudgetStopEvent(
                 reason="ledger_unavailable", run_id=run_id, agent=agent,
                 detail=f"could not check the lifetime budget: {type(exc).__name__}"))
         if not ok:
-            detail = ("the lifetime AI budget was already exhausted" if exhausted
-                      else f"next {agent} call could bring lifetime spend to ${spent + reserve:.4f}")
-            self._exhaust(run_id, agent, None if exhausted else spent + reserve, detail, state=state)
+            self._exhaust(run_id, agent, spent + reserve,
+                          f"next {agent} call could bring lifetime spend to ${spent + reserve:.4f}", state=state)
 
     def _exhaust(self, run_id: str, agent: str, observed: Decimal | None, detail: str,
                  state: _RunState | None = None) -> None:

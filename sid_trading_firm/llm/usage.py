@@ -117,9 +117,14 @@ def _sum_cost(records) -> Decimal:
 
 
 class _LocalReservations:
-    """Lifetime reservations kept in process memory (in-memory and file stores; one process only)."""
+    """Lifetime reservations kept in process memory (in-memory and file stores; one process only).
+
+    Not durable: an open reservation is lost if the process dies, so these stores are
+    refused for paid model calls (see ``budget.guard_for``).
+    """
 
     _lock: threading.Lock
+    durable_cross_process = False
 
     def _init_reservations(self) -> None:
         self._open: dict[str, Decimal] = {}

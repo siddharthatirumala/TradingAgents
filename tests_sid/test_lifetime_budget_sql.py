@@ -149,3 +149,62 @@ def test_postgres_concurrent_connections_cannot_jointly_pass_the_cap(postgres_db
         e.dispose()
     assert results.count(True) == 4 and results.count(False) == 12
     assert SqlUsageStore(postgres_db).lifetime_spent_usd() == 4 * WORST <= CAP
+
+
+# ------------------------------------------------------------------ crash and restart
+
+def capped_settings():
+    return settings(max_ai_cost_per_run_usd=str(CAP), max_ai_cost_per_day_usd=str(CAP),
+                    max_ai_cost_total_usd=str(CAP))
+
+
+def crash_and_restart(url):
+    """Reserve 4 worst cases, never record them, drop every object and connection, then reopen."""
+    s = capped_settings()
+    engine = make_engine(url)
+    db = Database(engine)
+    guard = BudgetGuard(s.budgets, s.pricing, SqlUsageStore(db))
+    run = started_run(db)
+    for _ in range(4):
+        guard.authorize(run_id=run, agent="cio", provider="anthropic", model="claude-sonnet-5-5",
+                        prompt_chars=3000, max_output_tokens=1000)
+    del guard, db
+    engine.dispose()                                                    # the process "dies" here
+
+    engine = make_engine(url)                                           # a new process
+    store = SqlUsageStore(Database(engine))
+    try:
+        assert store.lifetime_spent_usd() == 4 * WORST                  # the open reservations are still charged
+        with engine.connect() as c:
+            assert c.execute(text("SELECT count(*) FROM budget_reservations WHERE status = 'open'")).scalar() == 4
+        with pytest.raises(LifetimeBudgetExhausted):
+            BudgetGuard(s.budgets, s.pricing, store).authorize(
+                run_id=started_run(Database(engine)), agent="cio", provider="anthropic",
+                model="claude-sonnet-5-5", prompt_chars=3000, max_output_tokens=1000)
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.unit
+def test_an_open_reservation_survives_a_crash_on_a_database_file(tmp_path):
+    url = f"sqlite:///{(tmp_path / 'ledger.db').as_posix()}"
+    upgrade(url)
+    crash_and_restart(url)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not PG_URL, reason="SID_TEST_DATABASE_URL is not set")
+def test_an_open_reservation_survives_a_crash_on_postgresql(postgres_db):
+    assert SqlUsageStore(postgres_db).durable_cross_process is True
+    crash_and_restart(PG_URL)
+
+
+@pytest.mark.unit
+def test_the_jsonl_store_loses_open_reservations_on_restart_so_paid_mode_refuses_it(tmp_path):
+    from sid_trading_firm.llm import JsonlUsageStore
+
+    first = JsonlUsageStore(tmp_path / "usage.jsonl")
+    assert first.try_reserve(call_id=str(uuid.uuid4()), run_id=str(uuid.uuid4()), agent="cio", amount=WORST, cap=CAP)[0]
+    assert first.lifetime_spent_usd() == WORST
+    restarted = JsonlUsageStore(tmp_path / "usage.jsonl")               # in-memory reservations are gone
+    assert restarted.lifetime_spent_usd() == 0 and restarted.durable_cross_process is False

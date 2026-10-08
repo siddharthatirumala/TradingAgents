@@ -147,3 +147,10 @@ def test_a_report_can_be_rebuilt_from_saved_records_without_calling_a_model(tmp_
     for key in ("run_id", "status", "calls", "cost_usd", "wall_seconds", "budget_guard"):
         assert rebuilt[key] == original[key], key
     assert "UPSTREAM ALL-SONNET BASELINE" in (result.out_dir / "report.md").read_text()
+
+
+def test_the_baseline_refuses_real_provider_clients_while_paid_calls_are_blocked(tmp_path):
+    with pytest.raises(baseline.ConfigError, match="paid model calls are blocked"):
+        baseline.run_baseline("NVDA", TRADE_DATE, settings=settings(), out_root=tmp_path / "out",
+                              ledger_path=tmp_path / "ledger.jsonl")
+    assert not (tmp_path / "ledger.jsonl").exists() and not (tmp_path / "out").exists()

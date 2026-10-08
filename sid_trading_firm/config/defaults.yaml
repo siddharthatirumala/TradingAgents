@@ -57,7 +57,9 @@ models:
 budgets:
   max_ai_cost_per_run_usd: 3.00
   max_ai_cost_per_day_usd: 10.00
-  max_ai_cost_total_usd: 30.00     # lifetime Phase 1B measurement ceiling (owner, 2026-10-08); code caps it at 30
+  # Lifetime Phase 1B measurement ceiling (owner, 2026-10-08); code caps it at 30. A software
+  # authorisation ceiling based on provider billing assumptions, not a provider-side limit.
+  max_ai_cost_total_usd: 30.00
   max_llm_tokens_per_agent: 300000
   max_agent_iterations: 12
   max_debate_rounds: 1

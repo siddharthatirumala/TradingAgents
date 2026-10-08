@@ -9,6 +9,7 @@ Worst case of the test call: 1000 estimated input tokens (3000 chars) and 1000 o
 on Sonnet ($2 / $10 per million) = $0.012.
 """
 
+import contextlib
 import random
 import threading
 from datetime import UTC, datetime, timedelta
@@ -232,3 +233,76 @@ def test_an_unreadable_lifetime_ledger_refuses_the_call():
 
     with pytest.raises(LedgerUnavailable):
         authorize(capped(store=Broken()))
+
+
+# ------------------------------------------------------------------ paid mode needs a durable ledger
+
+def paid(s):
+    """Settings in a paid model mode. Configuration refuses it (paid mode is blocked); model_copy skips
+    validation to exercise the guard_for requirement that will apply once a paid mode exists."""
+    return s.model_copy(update={"research": s.research.model_copy(update={"model_mode": "paid"})})
+
+
+def test_paid_model_mode_is_still_blocked_by_configuration():
+    from sid_trading_firm.config import ConfigError, load_settings
+
+    with pytest.raises(ConfigError, match="Input should be 'mock'"):
+        load_settings(env_file=None, research={"model_mode": "paid"})
+
+
+def test_paid_mode_requires_the_postgresql_ledger(tmp_path):
+    from sid_trading_firm.config import ConfigError
+    from sid_trading_firm.llm import guard_for
+    from sid_trading_firm.persistence import Database, SqlUsageStore, make_engine
+    from sid_trading_firm.persistence.models import Base
+
+    engine = make_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    for store in (InMemoryUsageStore(), JsonlUsageStore(tmp_path / "u.jsonl"), SqlUsageStore(Database(engine))):
+        assert store.durable_cross_process is False
+        with pytest.raises(ConfigError, match="requires the PostgreSQL usage ledger"):
+            guard_for(paid(settings()), store)
+        guard_for(settings(), store)                                    # mock mode: any store
+    engine.dispose()
+
+
+# ------------------------------------------------------------------ the ceiling rests on billing assumptions
+
+def test_concurrent_over_billing_is_bounded_by_the_calls_in_flight():
+    """If providers bill above the worst case, spend can pass the cap by the in-flight calls' excess, once."""
+    store = InMemoryUsageStore()
+    guards = [capped("0.05", store) for _ in range(32)]
+    start = threading.Barrier(32)
+    in_flight = []
+
+    def worker(guard):
+        start.wait()
+        with contextlib.suppress(LifetimeBudgetExhausted):
+            in_flight.append((guard, authorize(guard)))
+
+    threads = [threading.Thread(target=worker, args=(g,)) for g in guards]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(in_flight) == 4                                          # 4 x $0.012 fits the $0.05 cap
+    for guard, auth in in_flight:                                       # every one billed $0.020 > $0.012
+        guard.record(auth, record(auth, cost="0.020"))
+    overrun = store.lifetime_spent_usd() - Decimal("0.05")
+    assert overrun == Decimal("0.03") == 4 * (Decimal("0.020") - WORST) - Decimal("0.002")
+    assert store.lifetime_exhausted()
+    for guard in guards:                                                # nothing more, from any guard
+        with pytest.raises(LifetimeBudgetExhausted):
+            authorize(guard)
+
+
+def test_sequential_over_billing_is_bounded_by_one_call():
+    store = InMemoryUsageStore()
+    guard = capped("0.05", store)
+    a = authorize(guard)
+    guard.record(a, record(a, cost="0.020"))                            # within the cap, but billed above worst
+    b = authorize(guard)                                                # 0.020 + 0.012 <= 0.05
+    guard.record(b, record(b, cost="0.040"))                            # pushes lifetime to 0.060
+    assert store.lifetime_spent_usd() - Decimal("0.05") == Decimal("0.010") <= Decimal("0.040") - WORST
+    with pytest.raises(LifetimeBudgetExhausted):
+        authorize(capped("0.05", store))

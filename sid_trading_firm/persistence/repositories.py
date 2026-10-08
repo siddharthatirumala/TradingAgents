@@ -104,6 +104,11 @@ class SqlUsageStore:
     def __init__(self, db: Database) -> None:
         self.db = db
 
+    @property
+    def durable_cross_process(self) -> bool:
+        """Reservations survive a crash and are serialised across processes: PostgreSQL only."""
+        return self.db.engine.dialect.name == "postgresql"
+
     def add(self, record: LLMCallRecord) -> None:
         with self.db.session() as s:
             s.add(LLMUsage(

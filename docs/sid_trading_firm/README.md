@@ -72,6 +72,30 @@ called, and a candidate is not a recommendation or a trade signal.
 python -m sid_trading_firm.screening.run docs/sid_trading_firm/examples/screen_large_cap.yaml --out <dir>
 ```
 
+## AI spending ceiling
+
+Paid AI use is capped at **$30 in total** (owner authorisation, 2026-10-08), alongside
+$3 per run and $10 per day. Paid model calls are currently **blocked**:
+`research.model_mode` accepts only `"mock"`, and the baseline harness refuses to use
+real provider clients.
+
+The $30 is a **software authorisation ceiling based on provider billing assumptions**,
+not a limit enforced by any provider. Before each call the budget guard reserves the
+call's worst case (estimated prompt and schema tokens plus the full output cap, no cache
+discount, at the prices in `sid_trading_firm/config/pricing.yaml`) against lifetime ledger
+spend, atomically and across processes on PostgreSQL, and refuses the call if it would
+not fit; the first refusal stops all AI work permanently. This holds only while:
+
+- providers bill no call above that worst case, and the price table matches their prices;
+- SDK retries stay disabled (`max_retries=0`), so one authorised call is one attempt;
+- paid calls are metered through the PostgreSQL ledger (`SqlUsageStore`), which paid
+  mode requires, so reservations survive crashes and concurrent processes.
+
+If a provider billed above the worst case, spend could pass $30 by the excess of the calls
+already in flight at that moment (one call when calls are sequential); the guard then stops
+everything permanently. Provider-side spending limits on the API accounts (set by the owner in
+each provider's console) are the recommended backstop against that case.
+
 ## Status
 
 Phases 1A (foundation), 2 (deterministic backtesting) and 3 (deterministic screening) are closed with Codex's technical approval after remediation; final `main` `69c3ab5`. **No next phase is authorised.** Gate records: [../PHASES.md](../PHASES.md). See [decisions.md](decisions.md) for the
