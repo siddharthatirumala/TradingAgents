@@ -235,6 +235,9 @@ Likely work:
 
 Work should still be broken into small PRs.
 
+**Status (2026-10-08):** a limited, zero-spend build is authorised under section 27. Paid model use,
+brokers, paper trading, cloud deployment and live trading remain unauthorised.
+
 ---
 
 ## Phase 2 — Deterministic strategy backtesting
@@ -842,3 +845,82 @@ scope. Governance changes other than recording this authorisation still need exp
 
 Ends when the consolidated review package after Phase 3 is delivered, or earlier if the owner revokes
 it. Phase 1B and later phases remain unauthorised.
+
+**Status:** ended on 2026-10-05 with the consolidated review (Codex: CHANGE REQUIRED). Remediation PRs
+#27-#31 were merged on the owner's explicit instruction, not under this section. Phase 1B was later
+authorised in limited form under section 27.
+
+---
+
+# 27. Phase 1B limited zero-spend build (owner authorisation, 2026-10-08)
+
+The owner has authorised a **limited, zero-spend Phase 1B build for research evaluation only**.
+
+Owner's wording:
+
+> "I authorize a strictly zero-spend Phase 1B implementation for research evaluation only. Begin with
+> small PRs for configuration validation, data snapshots, freshness checks, evidence records and
+> deterministic hard-risk rejection. Use mocked models and free/local data only. No paid AI calls,
+> broker connection, paper trading, cloud deployment or live trading. Keep research.enabled off by
+> default. Any missing risk limit must reject the decision. Stop after each PR for Codex review. Do not
+> claim or assume profitability; produce measured evidence and stop if the system adds no measurable
+> value."
+
+> "Authorize a hard maximum Phase 1B measurement budget of $30 total. Implementation and CI must cost $0
+> in paid AI usage. Enforce the existing limits of $3 per run and $10 per day. Use only a small number of
+> single-symbol measurement runs, with no automatic retries or budget increases. Stop permanently when the
+> $30 total is reached and report the results. No cloud, broker, paper trading or live trading costs are
+> authorised. This budget tests viability and does not imply guaranteed profitability."
+
+## Scope
+
+- Phase 1B work as proposed in `docs/sid_trading_firm/proposals/phase-1b-proposal.md`, built in small
+  PRs: configuration validation, data snapshots, freshness checks, evidence records, deterministic
+  hard-risk rejection, then the further steps of that proposal.
+- Research evaluation only. Outputs are research decisions, not orders.
+- `research.enabled` is off by default. Any missing, malformed or unapproved hard-risk limit rejects the
+  decision (section 22); no numeric limit is set without the owner's approval.
+
+## Cost rules
+
+- **Development and CI: mocked models only, $0 paid AI usage.** `research.model_mode` accepts only
+  `"mock"`; any paid mode is refused at load.
+- **$30 total Phase 1B measurement budget**, with the existing limits of $3 per run and $10 per day. The
+  $30 is bounded in code (`budgets.max_ai_cost_total_usd`, at most 30) so configuration cannot raise it.
+- The $30 is a **software authorisation ceiling based on provider billing assumptions**, not a limit
+  enforced by any provider. It holds while providers bill no call above its worst-case estimate, the
+  price table matches provider prices, and SDK retries stay disabled. If a provider billed above the
+  worst case, spend could pass the ceiling by the excess of the calls already in flight; the guard then
+  stops all AI work permanently. Provider-side spending limits set by the owner are the recommended
+  backstop.
+- Paid model calls require the PostgreSQL usage ledger (durable, cross-process reservations).
+- No automatic retries (`max_retries=0`) and no budget increases. Reaching the ceiling stops AI work
+  permanently, and the results are reported.
+- **No paid measurement run happens without a separate, explicit owner instruction** stating the
+  symbols, the number of runs and the $30 ceiling. Until then paid model mode stays blocked.
+
+## Merge cadence
+
+- Each PR stops for Codex review. A PR is merged only on the owner's explicit approval of that PR, after
+  its exact head is verified, CI is green on that head, and CI passes on `main` after the merge (merge
+  commits only; no squash, no force-push).
+- Stop on any unexplained failure, unexpected diff, migration issue, security finding or tree change.
+
+## Not authorised by this section
+
+Broker connections, paper trading (Phase 4), cloud deployment and cloud spending (Phase 6), live or
+real-money trading, Phases 5-7, excluded instruments, paid AI calls in development or CI, any paid
+measurement without the separate instruction above, and governance changes other than recording this
+authorisation.
+
+## Evaluation and stopping
+
+Profitability is neither claimed nor assumed. Phase 1B produces measured evidence (forward-only for AI
+decisions). If the system adds no measurable value, work stops and is reported.
+
+## Status
+
+- 1B.1 configuration validation, risk placeholders and the $30 cap: [#36]({R}/pull/36), merged `f7fcf92`.
+- 1B.2 lifetime-budget enforcement (migration 0006): [#37]({R}/pull/37), merged `1e3a0e9`.
+- Paid model mode blocked; no paid AI call since the Phase 1A baselines ($1.53 in total).
+- Phase 1B gate: open (`docs/PHASES.md`).

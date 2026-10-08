@@ -98,3 +98,24 @@ itself authorise the next phase. Work merged under delegated authority (section 
 | Rollback | Revert merge commits individually (`git revert -m 1 <merge>`); schema: `python -m sid_trading_firm.persistence.migrate downgrade <revision>`. |
 | Next phase and exact authorised scope | **None. No next phase is authorised.** Phase 1B (AI research), Phase 4 (paper brokerage), cloud deployment and live trading are not authorised and have not been started. Any next phase needs a separate owner authorisation. |
 
+---
+
+## Phase 1B: Controlled research organisation (limited zero-spend build, in progress)
+
+This record supersedes, for the limited scope below only, the "No next phase is authorised" entry of the
+gate closure above (2026-10-06).
+
+| Field | Record |
+|---|---|
+| Phase | 1B, controlled research organisation: **limited zero-spend build, in progress; gate open** |
+| Owner authorisation | 2026-10-08, recorded in `docs/GOVERNANCE.md` section 27: strictly zero-spend Phase 1B implementation for research evaluation only, plus a hard maximum Phase 1B measurement budget of **$30 total** ($3 per run, $10 per day). |
+| Approved scope and acceptance criteria | Proposal `docs/sid_trading_firm/proposals/phase-1b-proposal.md` (PR #35). Small PRs; mocked models and free/local data; `research.enabled` off by default; any missing risk limit rejects the decision. Gate criteria: the proposal's section 3 and GOVERNANCE section 21 (evidence references and structured outputs validated; stale, missing or invalid data and risk violations rejected; decisions persisted and traceable). |
+| Cost rules | Development and CI: **$0** paid AI usage (`research.model_mode` accepts only `"mock"`). **$30 software authorisation ceiling based on provider billing assumptions**, bounded in code; permanent stop at the ceiling; no automatic retries or budget increases; paid calls require the PostgreSQL ledger. **No paid measurement without a separate owner instruction** stating symbols, number of runs and the $30 ceiling. |
+| PRs so far | [#36](https://github.com/siddharthatirumala/TradingAgents/pull/36) 1B.1 research configuration, risk placeholders, $30 cap: merged `f7fcf92`. [#37](https://github.com/siddharthatirumala/TradingAgents/pull/37) 1B.2 lifetime-budget enforcement against the ledger, PostgreSQL ledger required for paid mode, migration 0006: merged `1e3a0e9`. Each was merged on the owner's explicit approval with exact-head CI and post-merge `main` CI green. |
+| Tests and CI evidence | On `1e3a0e9`: SID 673 unit and 31 PostgreSQL integration tests passed on Python 3.11 and 3.13; upstream suite passing on Linux CI; ruff, clean install and gitleaks green. |
+| Security and cost evidence | No paid AI call since the Phase 1A baselines: the local ledger holds 38 calls totalling $1.525070, the latest on 2026-10-04. Paid model mode is blocked at configuration load, and the baseline harness refuses real provider clients in mock mode. |
+| Known issues | Windows local upstream-suite limitation unchanged (see the gate closure); no exception created or extended. |
+| Rollback | Revert merge commits individually; schema `python -m sid_trading_firm.persistence.migrate downgrade 0005_backtest_equity` removes `budget_reservations`. |
+| Codex decision and reasons | Requested per PR. Not yet recorded for the phase. |
+| Not authorised | Brokers, paper trading (Phase 4), cloud deployment and spending, live or real-money trading, Phases 5-7, paid AI calls in development or CI, paid measurement without the separate instruction. |
+| Next step | 1B.3 data snapshots, after this governance record is reviewed. |
