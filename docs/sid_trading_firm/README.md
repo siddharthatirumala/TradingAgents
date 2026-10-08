@@ -98,6 +98,6 @@ each provider's console) are the recommended backstop against that case.
 
 ## Status
 
-Phases 1A (foundation), 2 (deterministic backtesting) and 3 (deterministic screening) are closed with Codex's technical approval after remediation; final `main` `69c3ab5`. **No next phase is authorised.** Gate records: [../PHASES.md](../PHASES.md). See [decisions.md](decisions.md) for the
+Phases 1A (foundation), 2 (deterministic backtesting) and 3 (deterministic screening) are closed with Codex's technical approval after remediation. Phase 1B is authorised only as a **limited, zero-spend build** (`docs/GOVERNANCE.md` section 27): mocked models only, a $30 software ceiling for any later paid measurement, which needs a separate owner instruction, and no brokers, paper trading, cloud deployment or live trading. Gate records: [../PHASES.md](../PHASES.md). See [decisions.md](decisions.md) for the
 approved architecture decisions and [development.md](development.md) for the
 branch, pull-request and upstream-sync workflow.

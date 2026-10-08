@@ -467,5 +467,19 @@ under the conditions recorded there.
 Review cadence for Codex: there is no per-PR review during this period. After Phase 3, review the single
 consolidated package Claude Code provides. Treat every PR merged under this authority as **not yet
 independently reviewed**: verify its evidence (diffs, CI on the merged head, test results, phase gate
-records) rather than accepting summaries. Your decision on that package is still required before any
-further phase; Phase 1B remains unauthorised.
+records) rather than accepting summaries. This authority ended on 2026-10-05 with the consolidated review.
+
+---
+
+## Phase 1B: limited zero-spend build (owner authorisation, 2026-10-08)
+
+See `docs/GOVERNANCE.md` section 27. Only the **limited, zero-spend Phase 1B build** is authorised, for
+research evaluation only, within the approved proposal
+(`docs/sid_trading_firm/proposals/phase-1b-proposal.md`): mocked models, free/local data, `research.enabled`
+off by default, and any missing risk limit rejecting the decision.
+
+Still prohibited: **paid measurement** (it needs a separate owner instruction naming symbols, number of runs
+and the $30 software ceiling), **broker connections, paper trading, cloud deployment and live trading**.
+
+Every Phase 1B PR stops for owner and Codex review; it is merged only on the owner's explicit approval of
+that PR. Reject scope beyond the approved proposal.
