@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from sid_trading_firm.config import ConfigError
 from sid_trading_firm.llm import (
     AIBudgetStop,
     BudgetExceeded,
@@ -125,11 +126,12 @@ def test_tokens_per_agent_are_capped_using_actual_usage():
     assert stop.value.event.reason == "agent_tokens"
 
 
-def test_an_unpriced_model_is_refused_unless_explicitly_allowed():
+def test_an_unpriced_model_is_refused_and_cannot_be_allowed():
     with pytest.raises(UnpricedModel):
         _authorize(_guard(), new_run_id(), model="mystery-model")
-    allowed = _guard(allow_unpriced_models=True)
-    _authorize(allowed, new_run_id(), model="mystery-model")
+    # An unpriced call cannot be held to the lifetime budget, so allowing one is refused at load.
+    with pytest.raises(ConfigError, match="allow_unpriced_models cannot be true"):
+        settings(allow_unpriced_models=True)
 
 
 def test_an_unreadable_ledger_stops_the_call():

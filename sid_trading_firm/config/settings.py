@@ -177,6 +177,8 @@ class BudgetSettings(Strict):
     max_ai_cost_per_day_usd: Annotated[Decimal, Field(gt=0)]
     # Lifetime ceiling on all paid AI spend for Phase 1B measurement (owner, 2026-10-08:
     # "hard maximum ... $30 total"). The bound is in code so configuration cannot raise it.
+    # A software authorisation ceiling, not a provider-side limit: it holds while providers
+    # bill no call above its worst-case estimate (see llm/budget.py).
     max_ai_cost_total_usd: Annotated[Decimal, Field(gt=0, le=Decimal("30.00"))]
     max_llm_tokens_per_agent: Annotated[int, Field(gt=0)]
     max_agent_iterations: Annotated[int, Field(gt=0)]
@@ -196,6 +198,9 @@ class BudgetSettings(Strict):
             raise ValueError("max_ai_cost_per_run_usd cannot exceed max_ai_cost_per_day_usd")
         if self.max_ai_cost_per_day_usd > self.max_ai_cost_total_usd:
             raise ValueError("max_ai_cost_per_day_usd cannot exceed max_ai_cost_total_usd")
+        if self.allow_unpriced_models:
+            raise ValueError("allow_unpriced_models cannot be true: an unpriced call cannot be held to the "
+                             "lifetime AI budget")
         return self
 
 

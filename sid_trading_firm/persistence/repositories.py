@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 import tradingagents
 from sid_trading_firm.config.settings import Settings
@@ -15,8 +15,18 @@ from sid_trading_firm.llm.budget import BudgetStopEvent
 from sid_trading_firm.llm.pricing import CostStatus
 from sid_trading_firm.llm.usage import LLMCallRecord
 from sid_trading_firm.persistence.db import Database
-from sid_trading_firm.persistence.models import RUN_STATUSES, AuditEvent, LLMUsage, ResearchRun
+from sid_trading_firm.persistence.models import (
+    RUN_STATUSES,
+    AuditEvent,
+    BudgetReservation,
+    LLMUsage,
+    ResearchRun,
+)
 from sid_trading_firm.runtime.context import RunContext
+
+# Serialises lifetime-budget reservations across processes on PostgreSQL (transaction-scoped).
+LIFETIME_BUDGET_LOCK_KEY = 0x5D1B_2B00
+LIFETIME_EXHAUSTED_EVENT = "ai_lifetime_budget_exhausted"
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -94,6 +104,11 @@ class SqlUsageStore:
     def __init__(self, db: Database) -> None:
         self.db = db
 
+    @property
+    def durable_cross_process(self) -> bool:
+        """Reservations survive a crash and are serialised across processes: PostgreSQL only."""
+        return self.db.engine.dialect.name == "postgresql"
+
     def add(self, record: LLMCallRecord) -> None:
         with self.db.session() as s:
             s.add(LLMUsage(
@@ -126,6 +141,66 @@ class SqlUsageStore:
             query = query.where(LLMUsage.run_id == uuid.UUID(run_id))
         with self.db.session() as s:
             return [_to_record(row) for row in s.scalars(query)]
+
+    # ------------------------------------------------------------ lifetime budget
+
+    @staticmethod
+    def _lifetime(s) -> Decimal:
+        recorded = s.scalar(select(func.coalesce(func.sum(LLMUsage.estimated_cost_usd), 0)))
+        assumed = s.scalar(select(func.coalesce(func.sum(BudgetReservation.assumed_usd), 0))
+                           .where(BudgetReservation.status == "settled"))
+        held = s.scalar(select(func.coalesce(func.sum(BudgetReservation.reserved_usd), 0))
+                        .where(BudgetReservation.status == "open"))
+        return Decimal(str(recorded)) + Decimal(str(assumed)) + Decimal(str(held))
+
+    def lifetime_spent_usd(self) -> Decimal:
+        with self.db.session() as s:
+            return self._lifetime(s)
+
+    def try_reserve(self, *, call_id: str, run_id: str, agent: str, amount: Decimal,
+                    cap: Decimal) -> tuple[bool, Decimal]:
+        """Check the cap and record the reservation in one transaction.
+
+        On PostgreSQL a transaction-scoped advisory lock serialises this check across
+        processes, so two concurrent callers cannot both take the last of the budget.
+        SQLite (tests only) relies on the guard's in-process lock.
+        """
+        with self.db.session() as s:
+            if s.get_bind().dialect.name == "postgresql":
+                s.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": LIFETIME_BUDGET_LOCK_KEY})
+            spent = self._lifetime(s)
+            if spent + amount > cap:
+                return False, spent
+            s.add(BudgetReservation(call_id=uuid.UUID(call_id), run_id=uuid.UUID(run_id), agent=agent,
+                                    reserved_usd=amount, status="open", created_at=datetime.now(UTC)))
+            return True, spent
+
+    def settle_reservation(self, call_id: str, *, assumed_usd: Decimal | None) -> None:
+        self._close(call_id, "settled", assumed_usd)
+
+    def release_reservation(self, call_id: str) -> None:
+        self._close(call_id, "released", None)
+
+    def _close(self, call_id: str, status: str, assumed_usd: Decimal | None) -> None:
+        with self.db.session() as s:
+            row = s.get(BudgetReservation, uuid.UUID(call_id))
+            if row is None:
+                raise LookupError(f"no budget reservation {call_id}")
+            if row.status != "open":
+                raise ValueError(f"budget reservation {call_id} is already {row.status}")
+            row.status, row.assumed_usd, row.settled_at = status, assumed_usd, datetime.now(UTC)
+
+    def lifetime_exhausted(self) -> bool:
+        with self.db.session() as s:
+            return s.scalar(select(func.count()).select_from(AuditEvent)
+                            .where(AuditEvent.event_type == LIFETIME_EXHAUSTED_EVENT)) > 0
+
+    def mark_lifetime_exhausted(self, detail: str) -> None:
+        if self.lifetime_exhausted():
+            return
+        with self.db.session() as s:
+            s.add(AuditEvent(run_id=None, occurred_at=datetime.now(UTC), event_type=LIFETIME_EXHAUSTED_EVENT,
+                             severity="critical", actor="budget_guard", message=detail, payload=None))
 
 
 def _to_record(row: LLMUsage) -> LLMCallRecord:

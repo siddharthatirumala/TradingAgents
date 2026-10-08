@@ -6,8 +6,10 @@ from sid_trading_firm.llm.budget import (
     BudgetGuard,
     BudgetStopEvent,
     LedgerUnavailable,
+    LifetimeBudgetExhausted,
     NoRunForCall,
     UnpricedModel,
+    guard_for,
 )
 from sid_trading_firm.llm.ledger import UsageLedger
 from sid_trading_firm.llm.models import chat_model, chat_model_for, upstream_config
@@ -28,6 +30,8 @@ __all__ = [
     "LLMCallRecord",
     "LedgerUnavailable",
     "NoRunForCall",
+    "LifetimeBudgetExhausted",
+    "guard_for",
     "UnpricedModel",
     "UsageLedger",
     "UsageStore",

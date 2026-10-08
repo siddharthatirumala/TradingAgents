@@ -119,6 +119,29 @@ class LLMUsage(Base):
     tool_calls: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
+RESERVATION_STATUSES = ("open", "settled", "released")
+
+
+class BudgetReservation(Base):
+    """A model call's worst-case cost, held against the lifetime AI budget from before the call."""
+
+    __tablename__ = "budget_reservations"
+    __table_args__ = (
+        CheckConstraint(f"status IN {RESERVATION_STATUSES}", name="status"),
+        Index(None, "status"),
+    )
+
+    call_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("research_runs.run_id", ondelete="RESTRICT"))
+    agent: Mapped[str] = mapped_column(String(64))
+    reserved_usd: Mapped[Decimal] = mapped_column(Numeric(14, 8))
+    # Set when the call settled without a known cost: its worst case stays charged.
+    assumed_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 8))
+    status: Mapped[str] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    settled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class AuditEvent(Base):
     """Something worth reconstructing later: a run starting or ending, a budget stop, a rejection."""
 

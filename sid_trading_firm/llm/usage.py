@@ -77,13 +77,33 @@ class LLMCallRecord:
 
 
 class UsageStore(Protocol):
-    """Where call records go. A store that cannot answer must raise, not guess."""
+    """Where call records go. A store that cannot answer must raise, not guess.
+
+    Lifetime budget (Phase 1B): before a call the guard reserves its worst case with
+    :meth:`try_reserve`, which checks and records the reservation atomically against
+    the lifetime cap. Lifetime spend counts recorded costs, the worst case of settled
+    calls whose cost is unknown, and every open reservation, so a call in flight or a
+    call that never reported back is always charged.
+    """
 
     def add(self, record: LLMCallRecord) -> None: ...
 
     def spent_usd(self, *, run_id: str | None = None, day: date | None = None) -> Decimal: ...
 
     def records(self, run_id: str | None = None) -> list[LLMCallRecord]: ...
+
+    def lifetime_spent_usd(self) -> Decimal: ...
+
+    def try_reserve(self, *, call_id: str, run_id: str, agent: str, amount: Decimal,
+                    cap: Decimal) -> tuple[bool, Decimal]: ...
+
+    def settle_reservation(self, call_id: str, *, assumed_usd: Decimal | None) -> None: ...
+
+    def release_reservation(self, call_id: str) -> None: ...
+
+    def lifetime_exhausted(self) -> bool: ...
+
+    def mark_lifetime_exhausted(self, detail: str) -> None: ...
 
 
 def _matches(record: LLMCallRecord, run_id: str | None, day: date | None) -> bool:
@@ -96,12 +116,70 @@ def _sum_cost(records) -> Decimal:
     return sum((r.estimated_cost_usd for r in records if r.estimated_cost_usd is not None), Decimal(0))
 
 
-class InMemoryUsageStore:
+class _LocalReservations:
+    """Lifetime reservations kept in process memory (in-memory and file stores; one process only).
+
+    Not durable: an open reservation is lost if the process dies, so these stores are
+    refused for paid model calls (see ``budget.guard_for``).
+    """
+
+    _lock: threading.Lock
+    durable_cross_process = False
+
+    def _init_reservations(self) -> None:
+        self._open: dict[str, Decimal] = {}
+        self._assumed: dict[str, Decimal] = {}
+        self._exhausted: str | None = None
+
+    def _recorded_total(self) -> Decimal:
+        raise NotImplementedError
+
+    def lifetime_spent_usd(self) -> Decimal:
+        with self._lock:
+            return self._lifetime_locked()
+
+    def _lifetime_locked(self) -> Decimal:
+        return (self._recorded_total() + sum(self._assumed.values(), Decimal(0))
+                + sum(self._open.values(), Decimal(0)))
+
+    def try_reserve(self, *, call_id: str, run_id: str, agent: str, amount: Decimal,
+                    cap: Decimal) -> tuple[bool, Decimal]:
+        with self._lock:
+            spent = self._lifetime_locked()
+            if spent + amount > cap:
+                return False, spent
+            self._open[call_id] = amount
+            return True, spent
+
+    def settle_reservation(self, call_id: str, *, assumed_usd: Decimal | None) -> None:
+        with self._lock:
+            self._open.pop(call_id, None)
+            if assumed_usd is not None:
+                self._assumed[call_id] = assumed_usd
+
+    def release_reservation(self, call_id: str) -> None:
+        with self._lock:
+            self._open.pop(call_id, None)
+
+    def lifetime_exhausted(self) -> bool:
+        with self._lock:
+            return self._exhausted is not None
+
+    def mark_lifetime_exhausted(self, detail: str) -> None:
+        with self._lock:
+            self._exhausted = self._exhausted or detail
+
+
+class InMemoryUsageStore(_LocalReservations):
     """Thread-safe in-process store, for tests and one-off scripts."""
 
     def __init__(self, records: list[LLMCallRecord] | None = None) -> None:
         self._lock = threading.Lock()
         self._records: list[LLMCallRecord] = list(records or [])
+        self._init_reservations()
+
+    def _recorded_total(self) -> Decimal:
+        return _sum_cost(self._records)
 
     def add(self, record: LLMCallRecord) -> None:
         with self._lock:
@@ -116,13 +194,30 @@ class InMemoryUsageStore:
             return [r for r in self._records if _matches(r, run_id, None)]
 
 
-class JsonlUsageStore:
-    """Append-only JSON-lines file: one record per line, readable without a database."""
+class JsonlUsageStore(_LocalReservations):
+    """Append-only JSON-lines file: one record per line, readable without a database.
+
+    Reservations live in memory (one process); the lifetime-exhausted marker is a
+    sibling file, so the permanent stop survives restarts.
+    """
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._init_reservations()
+        self._marker = self.path.with_name(self.path.name + ".lifetime-exhausted")
+
+    def _recorded_total(self) -> Decimal:
+        return _sum_cost(self._load())
+
+    def lifetime_exhausted(self) -> bool:
+        return super().lifetime_exhausted() or self._marker.exists()
+
+    def mark_lifetime_exhausted(self, detail: str) -> None:
+        super().mark_lifetime_exhausted(detail)
+        if not self._marker.exists():
+            self._marker.write_text(detail + "\n", encoding="utf-8")
 
     def add(self, record: LLMCallRecord) -> None:
         with self._lock, self.path.open("a", encoding="utf-8") as f:
